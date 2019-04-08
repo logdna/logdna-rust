@@ -78,39 +78,35 @@ impl Client {
     /// construct a future that represents a request to the logdna ingest api
     pub fn send(&self, body: IngestBody) -> IngestResponse {
         let hyper = self.hyper.clone(); // get a new ref to the hyper client
-        let req = self.build_template(self.new_template(), body)
-            .and_then(move |req|
-                hyper.request(req).map_err(Into::into)
-            )
-            .and_then(move |res| {
-                let status = res.status();
-                res
-                    .into_body()
-                    .map_err(Error::Hyper)
-                    .fold(Vec::new(), |mut vec, chunk| {
-                        vec.extend_from_slice(&*chunk);
-                        future::ok::<_, Error>(vec)
-                    })
-                    .and_then(move |bytes|
-                        String::from_utf8(bytes)
-                            .map_err(Error::Utf8)
-                    )
-                    .map(move |reason| {
-                        if status != 200 {
-                            Response::Failed(status, reason)
-                        } else {
-                            Response::Sent
-                        }
-                    })
-            });
+
+        let req = {
+            self.build_template(self.new_template(), body)
+                .and_then(move |req| hyper.request(req).map_err(Into::into))
+                .and_then(move |res| {
+                    let status = res.status();
+                    res.into_body()
+                        .map_err(Error::Hyper)
+                        .fold(Vec::new(), |mut vec, chunk| {
+                            vec.extend_from_slice(&*chunk);
+                            future::ok::<_, Error>(vec)
+                        })
+                        .and_then(move |bytes| String::from_utf8(bytes).map_err(Into::into))
+                        .map(move |reason| {
+                            if status != 200 {
+                                Response::Failed(status, reason)
+                            } else {
+                                Response::Sent
+                            }
+                        })
+                })
+        };
 
         Box::new(req)
     }
 
     fn new_template(&self) -> Builder {
         let mut b = Request::builder();
-        b
-            .method(Method::POST)
+        b.method(Method::POST)
             .header(ACCEPT_CHARSET, "utf8")
             .header(CONTENT_ENCODING, "gzip")
             .header("apiKey", "");
