@@ -1,0 +1,27 @@
+[package]
+name = "logdna-client"
+version = "0.1.0"
+authors = ["Connor Peticca <cjpet10@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+#error handling
+quick-error = "1"
+#io
+hyper = "0.12"
+tokio = "0.1"
+futures = "0.1"
+http = "0.1"
+#tls
+hyper-rustls = "0.16"
+rustls = "0.15"
+webpki = "0.19"
+webpki-roots = "0.16"
+ct-logs = "0.5"
+#utils
+arc-swap = "0.3"
+chrono = "0.4"
+#serailzation
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.5"
