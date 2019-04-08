@@ -12,6 +12,7 @@ hyper = "0.12"
 tokio = "0.1"
 futures = "0.1"
 http = "0.1"
+flate2 = "1"
 #tls
 hyper-rustls = "0.16"
 rustls = "0.15"
