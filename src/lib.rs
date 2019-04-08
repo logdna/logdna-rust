@@ -72,16 +72,16 @@ impl Client {
     /// construct a future that represents a request to the logdna ingest api
     pub fn make_request<T: Serialize>(&mut self, ingest_body: T) -> IngestResponse {
         //todo ingestion key
-        future::ok(Request::builder()
+        let test = future::ok(Request::builder()
             .method(Method::POST)
             .header(ACCEPT_CHARSET, "utf8")
             .header(CONTENT_ENCODING, "gzip")
             .header("apiKey", "")
         ).and_then(|builder| {
             serde_json::to_string(&ingest_body)
-                .into_future()
                 .map_err(|_| ())
-                .and_then(move |json| builder.body(json).into_future().map_err(|_| ()))
+                .and_then(move |json| builder.body(json).map_err(|_| ()))
+                .into_future()
         });
         unimplemented!()
     }
