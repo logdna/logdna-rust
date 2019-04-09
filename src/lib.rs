@@ -44,6 +44,7 @@ pub mod error;
 pub mod config;
 
 pub type IngestResponse = Box<Future<Item=Response, Error=Error> + Send + 'static>;
+pub type IngestRequest = Box<Future<Item=Request<Body>, Error=Error> + Send + 'static>;
 
 /// Provides an HTTP(s) client for communicating with logdnas ingest api
 pub struct Client {
@@ -113,7 +114,7 @@ impl Client {
         b
     }
 
-    fn build_template(&self, mut template: Builder, body: IngestBody) -> Box<Future<Item=Request<Body>, Error=Error> + Send> {
+    fn build_template(&self, mut template: Builder, body: IngestBody) -> IngestRequest {
         if true {
             Box::new(
                 future::ok(GzEncoder::new(Vec::new(), Compression::default()))
