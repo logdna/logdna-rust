@@ -1,6 +1,6 @@
 quick_error! {
      #[derive(Debug)]
-     pub enum Error {
+     pub enum ReuquestError {
         Json(err: serde_json::Error) {
              from()
         }
@@ -14,6 +14,27 @@ quick_error! {
              from()
         }
         Io(err: std::io::Error) {
+             from()
+        }
+     }
+}
+
+quick_error! {
+     #[derive(Debug)]
+     pub enum ResponseError {
+        Hyper(err: hyper::error::Error) {
+             from()
+        }
+     }
+}
+
+quick_error! {
+     #[derive(Debug)]
+     pub enum BuildError {
+        InvalidHeader(err: http::Error) {
+             from()
+        }
+        RequiredField(err: std::string::String) {
              from()
         }
      }
