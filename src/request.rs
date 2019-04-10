@@ -9,16 +9,16 @@ use crate::params::Params;
 
 pub type IngestRequest = Box<Future<Item=Request<Body>, Error=ReuquestError> + Send + 'static>;
 
+pub enum Encoding {
+    Json,
+    GzipJson(Compression),
+}
+
 pub struct RequestTemplate {
     method: Method,
     charset: HeaderValue,
     encoding: Encoding,
     api_key: String,
-}
-
-pub enum Encoding {
-    Json,
-    GzipJson(Compression),
 }
 
 impl RequestTemplate {
@@ -81,5 +81,12 @@ impl TemplateBuilder {
         self
     }
 
-    pub fn build(self) -> Result<RequestTemplate, BuildError> {}
+    pub fn build(self) -> Result<RequestTemplate, BuildError> {
+        Ok(RequestTemplate {
+            method: self.method,
+            charset: self.charset,
+            encoding: self.encoding,
+            api_key: self.api_key.ok_or("api_key is required in a TemplateBuilder".into())?,
+        })
+    }
 }

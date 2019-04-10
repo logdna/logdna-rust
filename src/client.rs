@@ -4,10 +4,11 @@ use hyper::Client as HyperClient;
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use rustls::ClientConfig as TlsConfig;
-use tokio::reactor::Handle;
-use tokio::runtime::TaskExecutor;
+use tokio::runtime::Runtime;
 
+use crate::body::IngestBody;
 use crate::config::ClientConfig;
+use crate::response::IngestResponse;
 
 pub struct Client {
     hyper: Arc<HyperClient<HttpsConnector<HttpConnector>>>,
@@ -15,7 +16,10 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(exec: TaskExecutor, reactor: Handle) -> Self {
+    pub fn new(config: ClientConfig, runtime: &mut Runtime) -> Self {
+        let exec = runtime.executor();
+        let reactor = runtime.reactor().clone();
+
         let http_connector = {
             let mut connector = HttpConnector::new_with_executor(
                 exec, Some(reactor),
@@ -35,7 +39,7 @@ impl Client {
 
         Client {
             hyper: Arc::new(HyperClient::builder().build(https_connector)),
-            config: ClientConfig,
+            config,
         }
     }
 
