@@ -14,12 +14,36 @@ use crate::error::ResponseError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
 
+/// Client for sending IngestRequests to LogDNA
 pub struct Client {
     hyper: Arc<HyperClient<HttpsConnector<HttpConnector>>>,
     template: RequestTemplate,
 }
 
 impl Client {
+    /// Create a new client taking a RequestTemplate and Tokio Runtime
+    ///
+    /// #  Example
+    ///
+    /// ```rust
+    /// # use logdna_client::client::Client;
+    /// # use tokio::runtime::Runtime;
+    /// # use logdna_client::params::{Params, Tags};
+    /// # use logdna_client::request::RequestTemplate;
+    ///
+    /// let mut rt = Runtime::new().expect("Runtime::new()");
+    /// let params = Params::builder()
+    ///     .hostname("rust-client-test")
+    ///     .tags(Tags::parse("this,is,a,test"))
+    ///     .build()
+    ///     .expect("Params::builder()");
+    /// let request_template = RequestTemplate::builder()
+    ///     .params(params)
+    ///     .api_key("<your ingestion key>")
+    ///     .build()
+    ///     .expect("RequestTemplate::builder()");
+    /// let client = Client::new(request_template, &mut rt);
+    /// ```
     pub fn new(template: RequestTemplate, runtime: &mut Runtime) -> Self {
         let exec = runtime.executor();
         let reactor = runtime.reactor().clone();
@@ -47,7 +71,9 @@ impl Client {
         }
     }
 
-    /// construct a future that represents a request to the logdna ingest api
+    /// Send an IngestBody to the LogDNA Ingest API
+    ///
+    /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
     pub fn send(&self, body: IngestBody) -> IngestResponse {
         let hyper = self.hyper.clone();
         Box::new(

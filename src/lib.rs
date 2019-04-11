@@ -8,7 +8,7 @@
 //! # Overview
 //! The general flow is quite simple, first create a new client with [`Client::new`](struct.Client.html#method.new).
 //!
-//! Then call [`Client::make_request`](struct.Client.html#method.make_request) as many times a you would like.
+//! Then call [`Client::send`](struct.Client.html#method.send) as many times a you would like.
 //!
 //! [LogDNA]: https://logdna.com/
 //! [Ingest API]: https://docs.logdna.com/v1.0/reference#api
@@ -18,11 +18,17 @@
 #[macro_use]
 extern crate quick_error;
 
+/// Log line and body types
 pub mod body;
+/// Http client
 pub mod client;
+/// Error types
 pub mod error;
+/// Query parameters
 pub mod params;
+/// Request types
 pub mod request;
+/// Response types
 pub mod response;
 
 #[cfg(test)]
