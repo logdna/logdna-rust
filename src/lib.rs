@@ -16,8 +16,6 @@
 //! [Tokio]: https://github.com/tokio-rs/tokio
 
 #[macro_use]
-extern crate derive_builder;
-#[macro_use]
 extern crate quick_error;
 
 pub mod body;

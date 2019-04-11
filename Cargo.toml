@@ -20,9 +20,7 @@ webpki = "0.19"
 webpki-roots = "0.16"
 ct-logs = "0.5"
 #utils
-arc-swap = "0.3"
 chrono = "0.4"
-derive_builder = "0.7"
 #serailzation
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
