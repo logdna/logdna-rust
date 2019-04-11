@@ -3,6 +3,8 @@ use std::fmt;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
 
+use crate::error::ParamsError;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Params {
     pub hostname: String,
@@ -16,39 +18,63 @@ pub struct Params {
 }
 
 impl Params {
-    pub fn new() -> Self {
-        Self {
-            hostname: String::new(),
-            mac: None,
-            ip: None,
-            now: 0,
-            tags: None,
-        }
-    }
-
-    pub fn set_hostname(&mut self, hostname: &str) -> &mut Self {
-        self.hostname = hostname.into();
-        self
-    }
-
-    pub fn set_mac(&mut self, mac: Option<&str>) -> &mut Self {
-        self.mac = mac.map(|v| v.into());
-        self
-    }
-
-    pub fn set_ip(&mut self, ip: Option<&str>) -> &mut Self {
-        self.ip = ip.map(|v| v.into());
-        self
+    pub fn builder() -> ParamsBuilder {
+        ParamsBuilder::new()
     }
 
     pub(crate) fn set_now(&mut self, now: i64) -> &mut Self {
         self.now = now;
         self
     }
+}
 
-    pub fn set_tags(&mut self, tags: Option<Tags>) -> &mut Self {
-        self.tags = tags;
+
+pub struct ParamsBuilder {
+    hostname: Option<String>,
+    mac: Option<String>,
+    ip: Option<String>,
+    tags: Option<Tags>,
+}
+
+impl ParamsBuilder {
+    pub fn new() -> Self {
+        Self {
+            hostname: None,
+            mac: None,
+            ip: None,
+            tags: None,
+        }
+    }
+
+    pub fn hostname<T: Into<String>>(&mut self, hostname: T) -> &mut Self {
+        self.hostname = Some(hostname.into());
         self
+    }
+
+    pub fn mac<T: Into<String>>(&mut self, mac: T) -> &mut Self {
+        self.mac = Some(mac.into());
+        self
+    }
+
+    pub fn ip<T: Into<String>>(&mut self, ip: T) -> &mut Self {
+        self.hostname = Some(ip.into());
+        self
+    }
+
+    pub fn tags<T: Into<Tags>>(&mut self, tags: T) -> &mut Self {
+        self.tags = Some(tags.into());
+        self
+    }
+
+    pub fn build(&mut self) -> Result<Params, ParamsError> {
+        Ok(Params {
+            hostname: self.hostname.clone()
+                .ok_or(ParamsError::RequiredField("hostname is required in a ParamsBuilder".into()))?,
+            mac: self.mac.clone(),
+            ip: self.ip.clone(),
+            now: 0,
+            tags: self.tags.clone(),
+        })
     }
 }
 
@@ -64,10 +90,15 @@ impl Tags {
         }
     }
 
-    pub fn parse(tags: &str) -> Self {
+    pub fn parse<T: Into<String>>(tags: T) -> Self {
         Self {
-            inner: tags.split_terminator(",").map(|s| s.to_string()).collect()
+            inner: tags.into().split_terminator(",").map(|s| s.to_string()).collect()
         }
+    }
+
+    pub fn add<T: Into<String>>(&mut self, tag: T) -> &mut Self {
+        self.inner.push(tag.into());
+        self
     }
 }
 
