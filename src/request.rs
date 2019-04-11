@@ -16,15 +16,15 @@ use crate::params::Params;
 pub type IngestRequest = Box<Future<Item=Request<Body>, Error=RequestError> + Send + 'static>;
 
 pub struct RequestTemplate {
-    method: Method,
-    charset: HeaderValue,
-    content: HeaderValue,
-    encoding: Encoding,
-    schema: Schema,
-    host: String,
-    endpoint: String,
-    params: Params,
-    api_key: String,
+    pub method: Method,
+    pub charset: HeaderValue,
+    pub content: HeaderValue,
+    pub encoding: Encoding,
+    pub schema: Schema,
+    pub host: String,
+    pub endpoint: String,
+    pub params: Params,
+    pub api_key: String,
 }
 
 impl RequestTemplate {

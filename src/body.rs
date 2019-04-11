@@ -47,15 +47,15 @@ impl IngestBody {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Line {
     #[serde(skip_serializing_if = "Option::is_none")]
-    app: Option<String>,
+    pub app: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    env: Option<String>,
+    pub env: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    file: Option<String>,
+    pub file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    level: Option<String>,
-    line: String,
-    timestamp: i64,
+    pub level: Option<String>,
+    pub line: String,
+    pub timestamp: i64,
 }
 
 impl Line {
