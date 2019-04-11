@@ -12,7 +12,7 @@ pub struct Params {
     pub mac: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip: Option<String>,
-    pub(crate) now: i64,
+    pub now: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Tags>,
 }
