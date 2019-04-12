@@ -38,7 +38,7 @@ mod tests {
     use crate::body::{IngestBody, Line};
     use crate::client::Client;
     use crate::params::{Params, Tags};
-    use crate::request::{Encoding, RequestTemplate};
+    use crate::request::RequestTemplate;
 
     #[test]
     fn it_works() {
