@@ -33,9 +33,11 @@ pub mod response;
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use tokio::runtime::Runtime;
 
-    use crate::body::{IngestBody, Line};
+    use crate::body::{IngestBody, Labels, Line};
     use crate::client::Client;
     use crate::params::{Params, Tags};
     use crate::request::RequestTemplate;
@@ -51,14 +53,19 @@ mod tests {
         let request_template = RequestTemplate::builder()
             .host("logs-k8s.logdna.com")
             .params(params)
-            .api_key("")
+            .api_key(env::var("API_KEY").unwrap())
             .build().expect("RequestTemplate::builder()");
         let client = Client::new(request_template, &mut rt);
+        let labels = Labels::new()
+            .add("app", "test")
+            .add("workload", "test");
         let line = Line::builder()
             .line("this is a test")
             .app("rust-client")
             .level("INFO")
+            .labels(labels)
             .build().expect("Line::builder()");
+        println!("{}", serde_json::to_string(&IngestBody::new(vec![line.clone()])).unwrap());
         println!("{:?}",
                  rt.block_on(
                      client.send(IngestBody::new(vec![line]))

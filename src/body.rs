@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::Utc;
 use flate2::write::GzEncoder;
 use futures::future::{Future, IntoFuture};
@@ -60,6 +62,9 @@ pub struct Line {
     /// The file field, e.g /var/log/syslog
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// The labels field, which is a key value map
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Labels>,
     /// The level field, e.g INFO
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<String>,
@@ -93,6 +98,7 @@ pub struct LineBuilder {
     app: Option<String>,
     env: Option<String>,
     file: Option<String>,
+    labels: Option<Labels>,
     level: Option<String>,
     line: Option<String>,
 }
@@ -104,6 +110,7 @@ impl LineBuilder {
             app: None,
             env: None,
             file: None,
+            labels: None,
             level: None,
             line: None,
         }
@@ -124,6 +131,11 @@ impl LineBuilder {
         self
     }
     /// Set the level field in the builder
+    pub fn labels<T: Into<Labels>>(&mut self, labels: T) -> &mut Self {
+        self.labels = Some(labels.into());
+        self
+    }
+    /// Set the level field in the builder
     pub fn level<T: Into<String>>(&mut self, level: T) -> &mut Self {
         self.level = Some(level.into());
         self
@@ -141,10 +153,27 @@ impl LineBuilder {
             app: self.app.clone(),
             env: self.env.clone(),
             file: self.file.clone(),
+            labels: self.labels.clone(),
             level: self.level.clone(),
             line: self.line.clone()
                 .ok_or(LineError::RequiredField("line is required in a LineBuilder".into()))?,
             timestamp: Utc::now().timestamp(),
         })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Labels(HashMap<String, String>);
+
+impl Labels {
+    pub fn new() -> Self {
+        Self {
+            0: HashMap::new()
+        }
+    }
+
+    pub fn add<T: Into<String>>(mut self, key: T, value: T) -> Self {
+        self.0.insert(key.into(), value.into());
+        self
     }
 }
