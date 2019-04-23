@@ -162,16 +162,18 @@ impl LineBuilder {
     }
 }
 
+/// Defines the labels attached to a line
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Labels(HashMap<String, String>);
 
 impl Labels {
+    /// Creates an empty Labels
     pub fn new() -> Self {
         Self {
             0: HashMap::new()
         }
     }
-
+    /// Adds a labels to the set of labels, overriding existing labels with the specified key
     pub fn add<T: Into<String>>(mut self, key: T, value: T) -> Self {
         self.0.insert(key.into(), value.into());
         self
