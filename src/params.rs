@@ -5,30 +5,41 @@ use serde::de::Visitor;
 
 use crate::error::ParamsError;
 
+// Represents the query parameters that are passed to the IngestAPI
+//
+// e.g ?hostname=test&now=42343234234
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Params {
+    // the hostname parameter, e.g node-001
     pub hostname: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    // the mac parameter (optional), e.g C0:FF:EE:C0:FF:EE
     pub mac: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    // the ip parameter (optional), e.g 127.0.0.1
     pub ip: Option<String>,
+    // the now parameter, e.g 435435875675
+    //
+    // Note this is set by the client upon every request
     pub now: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    // the tags parameter (optional), e.g this,is,a,test,tag
     pub tags: Option<Tags>,
 }
 
 impl Params {
+    // Constructs a new ParamsBuilder
     pub fn builder() -> ParamsBuilder {
         ParamsBuilder::new()
     }
-
+    // Sets the now field, this is for internal (crate) use
     pub(crate) fn set_now(&mut self, now: i64) -> &mut Self {
         self.now = now;
         self
     }
 }
 
-
+// Used to build an instance of Params
 pub struct ParamsBuilder {
     hostname: Option<String>,
     mac: Option<String>,
@@ -37,6 +48,7 @@ pub struct ParamsBuilder {
 }
 
 impl ParamsBuilder {
+    // Constructs a new ParamsBuilder
     pub fn new() -> Self {
         Self {
             hostname: None,
@@ -45,27 +57,27 @@ impl ParamsBuilder {
             tags: None,
         }
     }
-
+    // Sets the hostname field, required
     pub fn hostname<T: Into<String>>(&mut self, hostname: T) -> &mut Self {
         self.hostname = Some(hostname.into());
         self
     }
-
+    // Sets the mac field, optional
     pub fn mac<T: Into<String>>(&mut self, mac: T) -> &mut Self {
         self.mac = Some(mac.into());
         self
     }
-
+    // Sets the ip field, optional
     pub fn ip<T: Into<String>>(&mut self, ip: T) -> &mut Self {
         self.hostname = Some(ip.into());
         self
     }
-
+    // Sets the tags field, optional
     pub fn tags<T: Into<Tags>>(&mut self, tags: T) -> &mut Self {
         self.tags = Some(tags.into());
         self
     }
-
+    // Builds a Params instance from the current ParamsBuilder
     pub fn build(&mut self) -> Result<Params, ParamsError> {
         Ok(Params {
             hostname: self.hostname.clone()
@@ -78,27 +90,37 @@ impl ParamsBuilder {
     }
 }
 
+// Defines a comma separated list of tags, e.g this,is,a,test
 #[derive(Debug, Clone)]
 pub struct Tags {
     inner: Vec<String>
 }
 
 impl Tags {
+    // Constructs an empty instance
     pub fn new() -> Self {
         Self {
             inner: Vec::new()
         }
     }
-
+    // Parses a comma separated list of tags into a Tags instance, e.g this,is,a,test
     pub fn parse<T: Into<String>>(tags: T) -> Self {
         Self {
             inner: tags.into().split_terminator(",").map(|s| s.to_string()).collect()
         }
     }
-
+    // Manually adds a tag to the list of tags
     pub fn add<T: Into<String>>(&mut self, tag: T) -> &mut Self {
         self.inner.push(tag.into());
         self
+    }
+}
+
+impl<T> From<T> for Tags
+    where T: Into<String>
+{
+    fn from(input: T) -> Self {
+        Tags::parse(input)
     }
 }
 

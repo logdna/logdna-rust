@@ -4,9 +4,10 @@ use http::StatusCode;
 use crate::error::ResponseError;
 
 /// A response from the LogDNA Ingest API
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Response {
     Sent,
+    // contains a status code and a reason (String)
     Failed(StatusCode, String),
 }
 
