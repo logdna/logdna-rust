@@ -64,6 +64,7 @@ pub struct Line {
     pub file: Option<String>,
     /// The labels field, which is a key value map
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "label")]
     pub labels: Option<Labels>,
     /// The level field, e.g INFO
     #[serde(skip_serializing_if = "Option::is_none")]
