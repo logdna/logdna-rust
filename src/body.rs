@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 
 use chrono::Utc;
 use flate2::write::GzEncoder;
@@ -53,6 +54,10 @@ impl IngestBody {
 /// Defines a log line, marking none required fields as Option
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Line {
+    /// The annotations field, which is a key value map
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "label")]
+    pub annotations: Option<KeyValueMap>,
     /// The app field, e.g hello-world-service
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app: Option<String>,
@@ -65,7 +70,7 @@ pub struct Line {
     /// The labels field, which is a key value map
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "label")]
-    pub labels: Option<Labels>,
+    pub labels: Option<KeyValueMap>,
     /// The level field, e.g INFO
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<String>,
@@ -96,10 +101,11 @@ impl Line {
 ///    .expect("Line::builder()");
 /// ```
 pub struct LineBuilder {
+    annotations: Option<KeyValueMap>,
     app: Option<String>,
     env: Option<String>,
     file: Option<String>,
-    labels: Option<Labels>,
+    labels: Option<KeyValueMap>,
     level: Option<String>,
     line: Option<String>,
 }
@@ -108,6 +114,7 @@ impl LineBuilder {
     /// Creates a new line builder
     pub fn new() -> Self {
         Self {
+            annotations: None,
             app: None,
             env: None,
             file: None,
@@ -132,7 +139,7 @@ impl LineBuilder {
         self
     }
     /// Set the level field in the builder
-    pub fn labels<T: Into<Labels>>(&mut self, labels: T) -> &mut Self {
+    pub fn labels<T: Into<KeyValueMap>>(&mut self, labels: T) -> &mut Self {
         self.labels = Some(labels.into());
         self
     }
@@ -153,6 +160,7 @@ impl LineBuilder {
     /// To avoid copying you can use `build_owned` which consumes the builder
     pub fn build(&self) -> Result<Line, LineError> {
         Ok(Line {
+            annotations: self.annotations.clone(),
             app: self.app.clone(),
             env: self.env.clone(),
             file: self.file.clone(),
@@ -169,6 +177,7 @@ impl LineBuilder {
     /// Returning an error if required fields are missing
     pub fn build_owned(self) -> Result<Line, LineError> {
         Ok(Line {
+            annotations: self.annotations,
             app: self.app,
             env: self.env,
             file: self.file,
@@ -181,20 +190,37 @@ impl LineBuilder {
     }
 }
 
-/// Defines the labels attached to a line
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Labels(HashMap<String, String>);
+/// Json key value map (json object with a depth of 1)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KeyValueMap(HashMap<String, String>);
 
-impl Labels {
-    /// Creates an empty Labels
-    pub fn new() -> Self {
-        Self {
-            0: HashMap::new()
-        }
+impl Deref for KeyValueMap {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
-    /// Adds a labels to the set of labels, overriding existing labels with the specified key
+}
+
+impl DerefMut for KeyValueMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl KeyValueMap {
+    /// Create an empty key value map
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+    /// Add key value pair to the map
     pub fn add<T: Into<String>>(mut self, key: T, value: T) -> Self {
         self.0.insert(key.into(), value.into());
+        self
+    }
+    /// Remove key value pair from map
+    pub fn remove<'a, T: Into<&'a String>>(mut self, key: T) -> Self {
+        self.0.remove(key.into());
         self
     }
 }

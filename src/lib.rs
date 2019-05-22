@@ -107,7 +107,7 @@ mod tests {
 
     use tokio::runtime::Runtime;
 
-    use crate::body::{IngestBody, Labels, Line};
+    use crate::body::{IngestBody, KeyValueMap, Line};
     use crate::client::Client;
     use crate::params::{Params, Tags};
     use crate::request::RequestTemplate;
@@ -127,7 +127,7 @@ mod tests {
             .api_key(env::var("API_KEY").unwrap())
             .build().expect("RequestTemplate::builder()");
         let client = Client::new(request_template, &mut rt);
-        let labels = Labels::new()
+        let labels = KeyValueMap::new()
             .add("app", "test")
             .add("workload", "test");
         let line = Line::builder()
