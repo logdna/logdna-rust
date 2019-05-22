@@ -117,39 +117,57 @@ impl LineBuilder {
         }
     }
     /// Set the app field in the builder
-    pub fn app<T: Into<String>>(mut self, app: T) -> Self {
+    pub fn app<T: Into<String>>(&mut self, app: T) -> &mut Self {
         self.app = Some(app.into());
         self
     }
     /// Set the env field in the builder
-    pub fn env<T: Into<String>>(mut self, env: T) -> Self {
+    pub fn env<T: Into<String>>(&mut self, env: T) -> &mut Self {
         self.env = Some(env.into());
         self
     }
     /// Set the file field in the builder
-    pub fn file<T: Into<String>>(mut self, file: T) -> Self {
+    pub fn file<T: Into<String>>(&mut self, file: T) -> &mut Self {
         self.file = Some(file.into());
         self
     }
     /// Set the level field in the builder
-    pub fn labels<T: Into<Labels>>(mut self, labels: T) -> Self {
+    pub fn labels<T: Into<Labels>>(&mut self, labels: T) -> &mut Self {
         self.labels = Some(labels.into());
         self
     }
     /// Set the level field in the builder
-    pub fn level<T: Into<String>>(mut self, level: T) -> Self {
+    pub fn level<T: Into<String>>(&mut self, level: T) -> &mut Self {
         self.level = Some(level.into());
         self
     }
     /// Set the line field in the builder
-    pub fn line<T: Into<String>>(mut self, line: T) -> Self {
+    pub fn line<T: Into<String>>(&mut self, line: T) -> &mut Self {
         self.line = Some(line.into());
         self
     }
+    /// Construct a log line from the contents of this builder, returning an error if required fields are missing
+    ///
+    /// This method does not consume the builder so it can be used multiple times, however it does clone all fields
+    ///
+    /// To avoid copying you can use `build_owned` which consumes the builder
+    pub fn build(&self) -> Result<Line, LineError> {
+        Ok(Line {
+            app: self.app.clone(),
+            env: self.env.clone(),
+            file: self.file.clone(),
+            labels: self.labels.clone(),
+            level: self.level.clone(),
+            line: self.line.clone()
+                .ok_or(LineError::RequiredField("line field is required".into()))?,
+            timestamp: Utc::now().timestamp(),
+        })
+    }
+
     /// Construct a log line from the contents of this builder
     ///
     /// Returning an error if required fields are missing
-    pub fn build(self) -> Result<Line, LineError> {
+    pub fn build_owned(self) -> Result<Line, LineError> {
         Ok(Line {
             app: self.app,
             env: self.env,
