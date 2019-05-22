@@ -56,7 +56,7 @@ impl IngestBody {
 pub struct Line {
     /// The annotations field, which is a key value map
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "label")]
+    #[serde(rename = "annotation")]
     pub annotations: Option<KeyValueMap>,
     /// The app field, e.g hello-world-service
     #[serde(skip_serializing_if = "Option::is_none")]
