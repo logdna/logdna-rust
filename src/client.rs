@@ -52,7 +52,7 @@ impl Client {
             let mut connector = HttpConnector::new_with_executor(
                 exec, Some(reactor),
             );
-            connector.enforce_http(false); // this is need or https:// urls will error
+            connector.enforce_http(false); // this is needed or https:// urls will error
             connector
         };
 
