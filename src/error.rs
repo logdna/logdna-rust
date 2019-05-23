@@ -1,3 +1,8 @@
+use std::fmt::{Debug, Display, Error as FmtError, Formatter};
+use std::sync::Arc;
+
+use crate::body::IngestBody;
+
 quick_error! {
      #[derive(Debug)]
      pub enum RequestError {
@@ -10,19 +15,51 @@ quick_error! {
      }
 }
 
-quick_error! {
-     #[derive(Debug)]
-     pub enum ResponseError {
-        Build(err: RequestError) {
-             from()
+pub enum HttpError {
+    Build(RequestError),
+    Send(Arc<IngestBody>, hyper::error::Error),
+    Hyper(hyper::error::Error),
+    Utf8(std::string::FromUtf8Error),
+}
+
+impl From<RequestError> for HttpError {
+    fn from(e: RequestError) -> HttpError {
+        HttpError::Build(e)
+    }
+}
+
+impl From<hyper::error::Error> for HttpError {
+    fn from(e: hyper::error::Error) -> HttpError {
+        HttpError::Hyper(e)
+    }
+}
+
+impl From<std::string::FromUtf8Error> for HttpError {
+    fn from(e: std::string::FromUtf8Error) -> HttpError {
+        HttpError::Utf8(e)
+    }
+}
+
+impl Display for HttpError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        match self {
+            HttpError::Send(_, ref e) => { write!(f, "{}", e) }
+            HttpError::Hyper(ref e) => { write!(f, "{}", e) }
+            HttpError::Build(ref e) => { write!(f, "{}", e) }
+            HttpError::Utf8(ref e) => { write!(f, "{}", e) }
         }
-        Send(err: hyper::error::Error) {
-             from()
+    }
+}
+
+impl Debug for HttpError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        match self {
+            HttpError::Send(_, ref e) => { write!(f, "{}", e) }
+            HttpError::Hyper(ref e) => { write!(f, "{}", e) }
+            HttpError::Build(ref e) => { write!(f, "{}", e) }
+            HttpError::Utf8(ref e) => { write!(f, "{}", e) }
         }
-        Utf8(err: std::string::FromUtf8Error) {
-             from()
-        }
-     }
+    }
 }
 
 quick_error! {

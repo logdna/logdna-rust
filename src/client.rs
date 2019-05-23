@@ -10,7 +10,7 @@ use rustls::ClientConfig as TlsConfig;
 use tokio::runtime::Runtime;
 
 use crate::body::IngestBody;
-use crate::error::ResponseError;
+use crate::error::HttpError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
 
@@ -76,25 +76,30 @@ impl Client {
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
     pub fn send(&self, body: IngestBody) -> IngestResponse {
         let hyper = self.hyper.clone();
+        let body = Arc::new(body);
+        let tmp_body = body.clone();
         Box::new(
-            self.template.new_request(body)
-                .map_err(ResponseError::from)
-                .and_then(move |req| hyper.request(req).map_err(Into::into))
+            self.template.new_request(body.clone())
+                .map_err(HttpError::from)
+                .and_then(move |req|
+                    hyper.request(req)
+                        .map_err(move |e| HttpError::Send(body, e))
+                )
                 .and_then(|res| {
                     let status = res.status();
                     res.into_body()
                         .map_err(Into::into)
                         .fold(Vec::new(), |mut vec, chunk| {
                             vec.extend_from_slice(&*chunk);
-                            future::ok::<_, ResponseError>(vec)
+                            future::ok::<_, HttpError>(vec)
                         })
                         .and_then(|body| String::from_utf8(body).map_err(Into::into))
                         .map(move |reason| (status, reason))
                 })
-                .map(|(status, reason)| {
+                .map(move |(status, reason)| {
                     println!("{},{}", status, reason);
                     if status != 200 {
-                        Response::Failed(status, reason)
+                        Response::Failed(tmp_body, status, reason)
                     } else {
                         Response::Sent
                     }

@@ -16,7 +16,7 @@ use crate::request::Encoding;
 pub type HttpBody = Box<Future<Item=Body, Error=BodyError> + Send + 'static>;
 
 /// Type used to construct a body for an IngestRequest
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct IngestBody {
     lines: Vec<Line>
 }
@@ -26,33 +26,33 @@ impl IngestBody {
     pub fn new(lines: Vec<Line>) -> Self {
         Self { lines }
     }
+}
 
-    /// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
-    pub fn into_http_body(self, encoding: Encoding) -> HttpBody {
-        match encoding {
-            Encoding::GzipJson(level) =>
-                Box::new(
-                    future::ok(GzEncoder::new(Vec::new(), level))
-                        .and_then(move |mut encoder|
-                            serde_json::to_writer(&mut encoder, &self)
-                                .map_err(BodyError::from)
-                                .and_then(move |_| encoder.finish().map_err(Into::into))
-                        )
-                        .map(|bytes| Body::from(bytes))
-                ),
-            Encoding::Json =>
-                Box::new(
-                    serde_json::to_vec(&self)
-                        .map(|bytes| Body::from(bytes))
-                        .map_err(BodyError::from)
-                        .into_future()
-                )
-        }
+/// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
+pub fn into_http_body<T: AsRef<IngestBody> + Send + 'static>(body: T, encoding: Encoding) -> HttpBody {
+    match encoding {
+        Encoding::GzipJson(level) =>
+            Box::new(
+                future::ok(GzEncoder::new(Vec::new(), level))
+                    .and_then(move |mut encoder|
+                        serde_json::to_writer(&mut encoder, body.as_ref())
+                            .map_err(BodyError::from)
+                            .and_then(move |_| encoder.finish().map_err(Into::into))
+                    )
+                    .map(|bytes| Body::from(bytes))
+            ),
+        Encoding::Json =>
+            Box::new(
+                serde_json::to_vec(body.as_ref())
+                    .map(|bytes| Body::from(bytes))
+                    .map_err(BodyError::from)
+                    .into_future()
+            )
     }
 }
 
 /// Defines a log line, marking none required fields as Option
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Line {
     /// The annotations field, which is a key value map
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -191,7 +191,7 @@ impl LineBuilder {
 }
 
 /// Json key value map (json object with a depth of 1)
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeyValueMap(HashMap<String, String>);
 
 impl Deref for KeyValueMap {

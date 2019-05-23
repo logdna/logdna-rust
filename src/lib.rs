@@ -13,6 +13,7 @@
 //! # Example
 //! You first need a [Tokio Runtume]
 //! ```
+//! # use tokio::runtime::Runtime;
 //! let mut rt = Runtime::new().expect("Runtime::new()");
 //! ```
 //!
@@ -124,7 +125,7 @@ mod tests {
         let request_template = RequestTemplate::builder()
             .host("logs.logdna.com")
             .params(params)
-            .api_key(env::var("API_KEY").unwrap())
+            .api_key(env::var("API_KEY").expect("api key missing"))
             .build().expect("RequestTemplate::builder()");
         let client = Client::new(request_template, &mut rt);
         let labels = KeyValueMap::new()

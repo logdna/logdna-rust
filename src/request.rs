@@ -9,7 +9,7 @@ use http::header::HeaderValue;
 use http::request::Builder as RequestBuilder;
 use hyper::{Body, Request};
 
-use crate::body::IngestBody;
+use crate::body::{IngestBody, into_http_body};
 use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
 
@@ -44,7 +44,7 @@ impl RequestTemplate {
         TemplateBuilder::new()
     }
     /// Uses the template to create a new request
-    pub fn new_request(&self, body: IngestBody) -> IngestRequest {
+    pub fn new_request<T: AsRef<IngestBody> + Send + 'static>(&self, body: T) -> IngestRequest {
         let mut builder = RequestBuilder::new();
 
         let params = serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))
@@ -59,7 +59,7 @@ impl RequestTemplate {
         self.encoding.set_builder_encoding(&mut builder);
 
         Box::new(
-            body.into_http_body(self.encoding.clone())
+            into_http_body(body, self.encoding.clone())
                 .map_err(RequestError::from)
                 .and_then(move |body| builder.body(body).map_err(Into::into))
         )
