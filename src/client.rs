@@ -97,8 +97,7 @@ impl Client {
                         .map(move |reason| (status, reason))
                 })
                 .map(move |(status, reason)| {
-                    println!("{},{}", status, reason);
-                    if status != 200 {
+                    if status.as_u16() < 200 || status.as_u16() >= 300 {
                         Response::Failed(tmp_body, status, reason)
                     } else {
                         Response::Sent
