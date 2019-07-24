@@ -8,7 +8,7 @@ use crate::error::ParamsError;
 /// Represents the query parameters that are passed to the IngestAPI
 ///
 /// e.g `?hostname=test&now=42343234234`
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct Params {
     /// the hostname parameter, e.g `node-001`
     pub hostname: String,
