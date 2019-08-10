@@ -17,6 +17,7 @@ use crate::params::Params;
 pub type IngestRequest = Box<Future<Item=Request<Body>, Error=RequestError> + Send + 'static>;
 
 /// A reusable template to generate requests from
+#[derive(Debug)]
 pub struct RequestTemplate {
     /// HTTP method, default is POST
     pub method: Method,
