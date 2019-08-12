@@ -116,13 +116,27 @@ impl Tags {
     }
 }
 
-impl<T> From<T> for Tags
-    where T: Into<String>
-{
-    fn from(input: T) -> Self {
+impl From<String> for Tags {
+    fn from(input: String) -> Self {
         Tags::parse(input)
     }
 }
+
+impl<'a> From<&'a str> for Tags {
+    fn from(input: &'a str) -> Self {
+        Tags::parse(input)
+    }
+}
+
+impl From<Vec<String>> for Tags
+{
+    fn from(input: Vec<String>) -> Self {
+        let mut tags = Tags::new();
+        input.into_iter().for_each(|t| { tags.add(t); });
+        tags
+    }
+}
+
 
 impl Serialize for Tags {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
