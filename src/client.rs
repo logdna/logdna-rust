@@ -1,13 +1,14 @@
 use std::sync::Arc;
+use std::time::Duration;
 
-use futures::future;
+use futures::{future, Stream};
 use futures::future::Future;
-use futures::stream::Stream;
 pub use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use rustls::ClientConfig as TlsConfig;
 use tokio::runtime::Runtime;
+use tokio::timer::Timeout;
 
 use crate::body::IngestBody;
 use crate::error::HttpError;
@@ -18,6 +19,7 @@ use crate::response::{IngestResponse, Response};
 pub struct Client {
     hyper: Arc<HyperClient<HttpsConnector<HttpConnector>>>,
     template: RequestTemplate,
+    timeout: Duration,
 }
 
 impl Client {
@@ -66,36 +68,18 @@ impl Client {
         let https_connector = HttpsConnector::from((http_connector, tls_config));
 
         Client {
-            hyper: Arc::new(HyperClient::builder().build(https_connector)),
+            hyper: Arc::new(
+                HyperClient::builder()
+                    .max_idle_per_host(20)
+                    .build(https_connector)
+            ),
             template,
+            timeout: Duration::from_secs(5),
         }
     }
-
-    pub fn new_from_builder(template: RequestTemplate, runtime: &mut Runtime, builder: HyperBuilder) -> Self {
-        let exec = runtime.executor();
-        let reactor = runtime.reactor().clone();
-
-        let http_connector = {
-            let mut connector = HttpConnector::new_with_executor(
-                exec, Some(reactor),
-            );
-            connector.enforce_http(false); // this is needed or https:// urls will error
-            connector
-        };
-
-        let tls_config = {
-            let mut cfg = TlsConfig::new();
-            cfg.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
-            cfg.ct_logs = Some(&ct_logs::LOGS);
-            cfg
-        };
-
-        let https_connector = HttpsConnector::from((http_connector, tls_config));
-
-        Client {
-            hyper: Arc::new(builder.build(https_connector)),
-            template,
-        }
+    /// Sets the request timeout
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout
     }
     /// Send an IngestBody to the LogDNA Ingest API
     ///
@@ -104,12 +88,17 @@ impl Client {
         let hyper = self.hyper.clone();
         let body = Arc::new(body);
         let tmp_body = body.clone();
+        let tmp_body1 = body.clone();
+        let timeout = self.timeout.clone();
         Box::new(
             self.template.new_request(body.clone())
                 .map_err(HttpError::from)
                 .and_then(move |req|
-                    hyper.request(req)
-                        .map_err(move |e| HttpError::Send(body, e))
+                    Timeout::new(
+                        hyper.request(req)
+                            .map_err(move |e| HttpError::Send(body, e)),
+                        timeout,
+                    ).map_err(move |_| HttpError::Timeout(tmp_body))
                 )
                 .and_then(|res| {
                     let status = res.status();
@@ -124,7 +113,7 @@ impl Client {
                 })
                 .map(move |(status, reason)| {
                     if status.as_u16() < 200 || status.as_u16() >= 300 {
-                        Response::Failed(tmp_body, status, reason)
+                        Response::Failed(tmp_body1, status, reason)
                     } else {
                         Response::Sent
                     }

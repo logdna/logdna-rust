@@ -18,6 +18,7 @@ quick_error! {
 pub enum HttpError {
     Build(RequestError),
     Send(Arc<IngestBody>, hyper::error::Error),
+    Timeout(Arc<IngestBody>),
     Hyper(hyper::error::Error),
     Utf8(std::string::FromUtf8Error),
 }
@@ -44,6 +45,7 @@ impl Display for HttpError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
             HttpError::Send(_, ref e) => { write!(f, "{}", e) }
+            HttpError::Timeout(_) => { write!(f, "request timed out!") }
             HttpError::Hyper(ref e) => { write!(f, "{}", e) }
             HttpError::Build(ref e) => { write!(f, "{}", e) }
             HttpError::Utf8(ref e) => { write!(f, "{}", e) }
@@ -55,6 +57,7 @@ impl Debug for HttpError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
             HttpError::Send(_, ref e) => { write!(f, "{}", e) }
+            HttpError::Timeout(_) => { write!(f, "request timed out!") }
             HttpError::Hyper(ref e) => { write!(f, "{}", e) }
             HttpError::Build(ref e) => { write!(f, "{}", e) }
             HttpError::Utf8(ref e) => { write!(f, "{}", e) }

@@ -105,6 +105,7 @@ pub mod response;
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::time::Duration;
 
     use tokio::runtime::Runtime;
 
