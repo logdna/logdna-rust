@@ -3,7 +3,7 @@ use std::sync::Arc;
 use futures::future;
 use futures::future::Future;
 use futures::stream::Stream;
-use hyper::Client as HyperClient;
+use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use rustls::ClientConfig as TlsConfig;
@@ -71,6 +71,32 @@ impl Client {
         }
     }
 
+    pub fn new_from_builder(template: RequestTemplate, runtime: &mut Runtime, builder: HyperBuilder) -> Self {
+        let exec = runtime.executor();
+        let reactor = runtime.reactor().clone();
+
+        let http_connector = {
+            let mut connector = HttpConnector::new_with_executor(
+                exec, Some(reactor),
+            );
+            connector.enforce_http(false); // this is needed or https:// urls will error
+            connector
+        };
+
+        let tls_config = {
+            let mut cfg = TlsConfig::new();
+            cfg.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+            cfg.ct_logs = Some(&ct_logs::LOGS);
+            cfg
+        };
+
+        let https_connector = HttpsConnector::from((http_connector, tls_config));
+
+        Client {
+            hyper: Arc::new(builder.build(https_connector)),
+            template,
+        }
+    }
     /// Send an IngestBody to the LogDNA Ingest API
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
