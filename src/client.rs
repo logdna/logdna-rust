@@ -3,7 +3,7 @@ use std::sync::Arc;
 use futures::future;
 use futures::future::Future;
 use futures::stream::Stream;
-use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
+pub use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use rustls::ClientConfig as TlsConfig;
