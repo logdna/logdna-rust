@@ -94,16 +94,16 @@ impl Client {
             self.template.new_request(body.clone())
                 .map_err(HttpError::from)
                 .and_then(move |req|
-                    Timeout::new(
+//                    Timeout::new(
                         hyper.request(req)
                             .map_err(move |e| HttpError::Send(body, e)),
-                        timeout,
-                    ).map_err(move |e| {
-                        match e.into_inner() {
-                            Some(e) => e,
-                            None => HttpError::Timeout(tmp_body),
-                        }
-                    })
+//                        timeout,
+//                    ).map_err(move |e| {
+//                        match e.into_inner() {
+//                            Some(e) => e,
+//                            None => HttpError::Timeout(tmp_body),
+//                        }
+//                    })
                 )
                 .and_then(|res| {
                     let status = res.status();
