@@ -8,7 +8,7 @@ use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use rustls::ClientConfig as TlsConfig;
 use tokio::runtime::Runtime;
-use tokio::timer::Timeout;
+use tokio::timer::{Timeout, timeout::Error as TimeoutError};
 
 use crate::body::IngestBody;
 use crate::error::HttpError;
@@ -98,7 +98,12 @@ impl Client {
                         hyper.request(req)
                             .map_err(move |e| HttpError::Send(body, e)),
                         timeout,
-                    ).map_err(move |_| HttpError::Timeout(tmp_body))
+                    ).map_err(move |e| {
+                        match e.into_inner() {
+                            Some(e) => e,
+                            None => HttpError::Timeout(tmp_body),
+                        }
+                    })
                 )
                 .and_then(|res| {
                     let status = res.status();
