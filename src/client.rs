@@ -8,7 +8,7 @@ use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use rustls::ClientConfig as TlsConfig;
 use tokio::runtime::Runtime;
-use tokio::timer::{Timeout, timeout::Error as TimeoutError};
+use tokio::timer::Timeout;
 
 use crate::body::IngestBody;
 use crate::error::HttpError;

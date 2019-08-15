@@ -74,6 +74,9 @@ quick_error! {
         Gzip(err: std::io::Error) {
              from()
         }
+        Canceled(err: futures::sync::oneshot::Canceled) {
+             from()
+        }
      }
 }
 

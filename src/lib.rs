@@ -87,6 +87,8 @@
 //! [Tokio Runtume]: https://docs.rs/tokio/latest/tokio/runtime/index.html
 
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate quick_error;
 
 /// Log line and body types
@@ -105,7 +107,6 @@ pub mod response;
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::time::Duration;
 
     use tokio::runtime::Runtime;
 

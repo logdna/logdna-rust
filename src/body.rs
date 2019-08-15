@@ -3,14 +3,19 @@ use std::ops::{Deref, DerefMut};
 
 use chrono::Utc;
 use flate2::write::GzEncoder;
-use futures::future::{Future, IntoFuture};
 use futures::future;
+use futures::future::Future;
+use futures_cpupool::CpuPool;
 use hyper::Body;
 use serde::{Deserialize, Serialize};
 
 use crate::error::BodyError;
 use crate::error::LineError;
 use crate::request::Encoding;
+
+lazy_static! {
+    static ref CPU_POOL: CpuPool = CpuPool::new_num_cpus();
+}
 
 /// HTTP body type alias
 pub type HttpBody = Box<Future<Item=Body, Error=BodyError> + Send + 'static>;
@@ -32,7 +37,7 @@ impl IngestBody {
 pub fn into_http_body<T: AsRef<IngestBody> + Send + 'static>(body: T, encoding: Encoding) -> HttpBody {
     match encoding {
         Encoding::GzipJson(level) =>
-            Box::new(
+            Box::new(CPU_POOL.spawn_fn(move ||
                 future::ok(GzEncoder::new(Vec::new(), level))
                     .and_then(move |mut encoder|
                         serde_json::to_writer(&mut encoder, body.as_ref())
@@ -40,14 +45,13 @@ pub fn into_http_body<T: AsRef<IngestBody> + Send + 'static>(body: T, encoding: 
                             .and_then(move |_| encoder.finish().map_err(Into::into))
                     )
                     .map(|bytes| Body::from(bytes))
-            ),
+            )),
         Encoding::Json =>
-            Box::new(
+            Box::new(CPU_POOL.spawn_fn(move ||
                 serde_json::to_vec(body.as_ref())
                     .map(|bytes| Body::from(bytes))
                     .map_err(BodyError::from)
-                    .into_future()
-            )
+            ))
     }
 }
 

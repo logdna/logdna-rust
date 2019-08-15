@@ -10,6 +10,7 @@ description = "wrapper around LogDNA's Ingest API"
 #error handling
 quick-error = "1"
 #io
+futures-cpupool = "0.1"
 hyper = "0.12"
 tokio = "0.1"
 futures = "0.1"
@@ -23,6 +24,7 @@ webpki-roots = "0.16"
 ct-logs = "0.5"
 #utils
 chrono = "0.4"
+lazy_static = "1"
 #serailzation
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
