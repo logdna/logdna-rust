@@ -104,6 +104,7 @@ impl Line {
 ///    .build()
 ///    .expect("Line::builder()");
 /// ```
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct LineBuilder {
     annotations: Option<KeyValueMap>,
     app: Option<String>,
