@@ -8,6 +8,7 @@ use futures::future::Future;
 use futures_cpupool::CpuPool;
 use hyper::Body;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::error::BodyError;
 use crate::error::LineError;
@@ -78,6 +79,9 @@ pub struct Line {
     /// The level field, e.g INFO
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<String>,
+    /// The meta field, can be any json value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Value>,
     /// The line field, e.g 28/Jul/2006:10:27:32 -0300 LogDNA is awesome!
     pub line: String,
     /// The timestamp of when the log line is constructed e.g, 342t783264
@@ -106,13 +110,14 @@ impl Line {
 /// ```
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct LineBuilder {
-    annotations: Option<KeyValueMap>,
-    app: Option<String>,
-    env: Option<String>,
-    file: Option<String>,
-    labels: Option<KeyValueMap>,
-    level: Option<String>,
-    line: Option<String>,
+    pub annotations: Option<KeyValueMap>,
+    pub app: Option<String>,
+    pub env: Option<String>,
+    pub file: Option<String>,
+    pub labels: Option<KeyValueMap>,
+    pub level: Option<String>,
+    pub line: Option<String>,
+    pub meta: Option<Value>
 }
 
 impl LineBuilder {
@@ -126,6 +131,7 @@ impl LineBuilder {
             labels: None,
             level: None,
             line: None,
+            meta: None,
         }
     }
     /// Set the app field in the builder
@@ -156,6 +162,11 @@ impl LineBuilder {
     /// Set the line field in the builder
     pub fn line<T: Into<String>>(mut self, line: T) -> Self {
         self.line = Some(line.into());
+        self
+    }
+    /// Set the meta field in the builder
+    pub fn meta<T: Into<Value>>(mut self, meta: T) -> Self {
+        self.meta = Some(meta.into());
         self
     }
     /// Construct a log line from the contents of this builder
