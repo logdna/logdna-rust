@@ -134,6 +134,11 @@ impl LineBuilder {
             meta: None,
         }
     }
+    /// Set the annotations field in the builder
+    pub fn annotations<T: Into<KeyValueMap>>(mut self, annotations: T) -> Self {
+        self.annotations = Some(annotations.into());
+        self
+    }
     /// Set the app field in the builder
     pub fn app<T: Into<String>>(mut self, app: T) -> Self {
         self.app = Some(app.into());
