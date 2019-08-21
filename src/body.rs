@@ -180,6 +180,7 @@ impl LineBuilder {
             file: self.file,
             labels: self.labels,
             level: self.level,
+            meta: self.meta,
             line: self.line
                 .ok_or(LineError::RequiredField("line field is required".into()))?,
             timestamp: Utc::now().timestamp(),
