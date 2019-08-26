@@ -133,11 +133,15 @@ mod tests {
         let labels = KeyValueMap::new()
             .add("app", "test")
             .add("workload", "test");
+        let annotations = KeyValueMap::new()
+            .add("app", "test")
+            .add("workload", "test");
         let line = Line::builder()
             .line("this is a test")
             .app("rust-client")
             .level("INFO")
             .labels(labels)
+            .annotations(annotations)
             .build().expect("Line::builder()");
         println!("{}", serde_json::to_string(&IngestBody::new(vec![line.clone()])).unwrap());
         assert_eq!(Response::Sent,
