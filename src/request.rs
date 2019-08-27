@@ -47,7 +47,7 @@ impl RequestTemplate {
         TemplateBuilder::new()
     }
     /// Uses the template to create a new request
-    pub fn new_request<T: Deref<IngestBody> + Send + 'static>(&self, body: T) -> IngestRequest {
+    pub fn new_request<T: Deref<Target=IngestBody> + Send + 'static>(&self, body: T) -> IngestRequest {
         let mut builder = RequestBuilder::new();
 
         let params = serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))
