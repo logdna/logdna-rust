@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use chrono::Utc;
 use flate2::Compression;
 use futures::Future;
