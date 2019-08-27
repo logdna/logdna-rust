@@ -84,9 +84,11 @@ impl Client {
     /// Send an IngestBody to the LogDNA Ingest API
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
-    pub fn send(&self, body: IngestBody) -> IngestResponse {
+    pub fn send<T>(&self, body: T) -> IngestResponse<T>
+        where T: AsRef<IngestBody> + Send + 'static,
+              T: Clone,
+    {
         let hyper = self.hyper.clone();
-        let body = Arc::new(body);
         let tmp_body = body.clone();
         let tmp_body1 = body.clone();
         let timeout = self.timeout.clone();
@@ -111,7 +113,7 @@ impl Client {
                         .map_err(Into::into)
                         .fold(Vec::new(), |mut vec, chunk| {
                             vec.extend_from_slice(&*chunk);
-                            future::ok::<_, HttpError>(vec)
+                            future::ok::<_, HttpError<T>>(vec)
                         })
                         .and_then(|body| String::from_utf8(body).map_err(Into::into))
                         .map(move |reason| (status, reason))

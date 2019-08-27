@@ -107,6 +107,7 @@ pub mod response;
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::sync::Arc;
 
     use tokio::runtime::Runtime;
 
@@ -146,7 +147,7 @@ mod tests {
         println!("{}", serde_json::to_string(&IngestBody::new(vec![line.clone()])).unwrap());
         assert_eq!(Response::Sent,
                    rt.block_on(
-                       client.send(IngestBody::new(vec![line]))
+                       client.send(Arc::new(IngestBody::new(vec![line])))
                    ).unwrap()
         )
     }

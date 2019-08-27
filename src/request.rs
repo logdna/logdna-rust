@@ -14,7 +14,7 @@ use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
 
 ///type alias for a request used by the client
-pub type IngestRequest = Box<Future<Item=Request<Body>, Error=RequestError> + Send + 'static>;
+pub type IngestRequest = Box<dyn Future<Item=Request<Body>, Error=RequestError> + Send + 'static>;
 
 /// A reusable template to generate requests from
 #[derive(Debug)]

@@ -19,7 +19,7 @@ lazy_static! {
 }
 
 /// HTTP body type alias
-pub type HttpBody = Box<Future<Item=Body, Error=BodyError> + Send + 'static>;
+pub type HttpBody = Box<dyn Future<Item=Body, Error=BodyError> + Send + 'static>;
 
 /// Type used to construct a body for an IngestRequest
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

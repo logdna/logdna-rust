@@ -1,5 +1,4 @@
 use std::fmt::{Debug, Display, Error as FmtError, Formatter};
-use std::sync::Arc;
 
 use crate::body::IngestBody;
 
@@ -15,33 +14,48 @@ quick_error! {
      }
 }
 
-pub enum HttpError {
+pub enum HttpError<T>
+    where T: AsRef<IngestBody> + Send + 'static,
+          T: Clone,
+{
     Build(RequestError),
-    Send(Arc<IngestBody>, hyper::error::Error),
-    Timeout(Arc<IngestBody>),
+    Send(T, hyper::error::Error),
+    Timeout(T),
     Hyper(hyper::error::Error),
     Utf8(std::string::FromUtf8Error),
 }
 
-impl From<RequestError> for HttpError {
-    fn from(e: RequestError) -> HttpError {
+impl<T> From<RequestError> for HttpError<T>
+    where T: AsRef<IngestBody> + Send + 'static,
+          T: Clone,
+{
+    fn from(e: RequestError) -> HttpError<T> {
         HttpError::Build(e)
     }
 }
 
-impl From<hyper::error::Error> for HttpError {
-    fn from(e: hyper::error::Error) -> HttpError {
+impl<T> From<hyper::error::Error> for HttpError<T>
+    where T: AsRef<IngestBody> + Send + 'static,
+          T: Clone,
+{
+    fn from(e: hyper::error::Error) -> HttpError<T> {
         HttpError::Hyper(e)
     }
 }
 
-impl From<std::string::FromUtf8Error> for HttpError {
-    fn from(e: std::string::FromUtf8Error) -> HttpError {
+impl<T> From<std::string::FromUtf8Error> for HttpError<T>
+    where T: AsRef<IngestBody> + Send + 'static,
+          T: Clone,
+{
+    fn from(e: std::string::FromUtf8Error) -> HttpError<T> {
         HttpError::Utf8(e)
     }
 }
 
-impl Display for HttpError {
+impl<T> Display for HttpError<T>
+    where T: AsRef<IngestBody> + Send + 'static,
+          T: Clone,
+{
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
             HttpError::Send(_, ref e) => { write!(f, "{}", e) }
@@ -53,15 +67,12 @@ impl Display for HttpError {
     }
 }
 
-impl Debug for HttpError {
+impl<T> Debug for HttpError<T>
+    where T: AsRef<IngestBody> + Send + 'static,
+          T: Clone,
+{
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        match self {
-            HttpError::Send(_, ref e) => { write!(f, "{}", e) }
-            HttpError::Timeout(_) => { write!(f, "request timed out!") }
-            HttpError::Hyper(ref e) => { write!(f, "{}", e) }
-            HttpError::Build(ref e) => { write!(f, "{}", e) }
-            HttpError::Utf8(ref e) => { write!(f, "{}", e) }
-        }
+        Display::fmt(self, f)
     }
 }
 
