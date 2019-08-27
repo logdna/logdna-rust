@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -85,7 +86,7 @@ impl Client {
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
     pub fn send<T>(&self, body: T) -> IngestResponse<T>
-        where T: AsRef<IngestBody> + Send + 'static,
+        where T: Deref<Target=IngestBody> + Send + 'static,
               T: Clone,
     {
         let hyper = self.hyper.clone();

@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use futures::Future;
 use http::StatusCode;
 
@@ -7,7 +9,7 @@ use crate::error::HttpError;
 /// A response from the LogDNA Ingest API
 #[derive(Debug, PartialEq)]
 pub enum Response<T>
-    where T: AsRef<IngestBody> + Send + 'static,
+    where T: Deref<Target=IngestBody> + Send + 'static,
           T: Clone,
 {
     Sent,

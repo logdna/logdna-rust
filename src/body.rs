@@ -35,7 +35,7 @@ impl IngestBody {
 }
 
 /// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
-pub fn into_http_body<T: AsRef<IngestBody> + Send + 'static>(body: T, encoding: Encoding) -> HttpBody {
+pub fn into_http_body<T: Deref<Target=IngestBody> + Send + 'static>(body: T, encoding: Encoding) -> HttpBody {
     match encoding {
         Encoding::GzipJson(level) =>
             Box::new(CPU_POOL.spawn_fn(move ||
