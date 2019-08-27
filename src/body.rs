@@ -22,7 +22,7 @@ lazy_static! {
 pub type HttpBody = Box<dyn Future<Item=Body, Error=BodyError> + Send + 'static>;
 
 /// Type used to construct a body for an IngestRequest
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct IngestBody {
     lines: Vec<Line>
 }
