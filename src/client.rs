@@ -72,6 +72,7 @@ impl Client {
             hyper: Arc::new(
                 HyperClient::builder()
                     .max_idle_per_host(20)
+                    .http1_writev(false)
                     .build(https_connector)
             ),
             template,
