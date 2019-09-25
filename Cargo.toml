@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Connor Peticca <cjpet10@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -10,7 +10,6 @@ description = "wrapper around LogDNA's Ingest API"
 #error handling
 quick-error = "1"
 #io
-futures-cpupool = "0.1"
 hyper = "0.12"
 tokio = "0.1"
 futures = "0.1"
