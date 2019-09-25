@@ -39,7 +39,7 @@
 //! Now you have everything to create a client
 //! ```
 //! # use logdna_client::client::Client;
-//! let client = Client::new(request_template, &mut rt);
+//! let client = Client::new(request_template);
 //! ```
 //! To use a client, we need to call [`Client::send`](client/struct.Client.html#method.send)
 //!
@@ -130,7 +130,7 @@ mod tests {
             .params(params)
             .api_key(env::var("API_KEY").expect("api key missing"))
             .build().expect("RequestTemplate::builder()");
-        let client = Client::new(request_template, &mut rt);
+        let client = Client::new(request_template);
         let labels = KeyValueMap::new()
             .add("app", "test")
             .add("workload", "test");

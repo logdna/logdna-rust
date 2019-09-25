@@ -8,17 +8,17 @@ pub use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use rustls::ClientConfig as TlsConfig;
-use tokio::runtime::Runtime;
 use tokio::timer::Timeout;
 
 use crate::body::IngestBody;
 use crate::error::HttpError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
+use hyper::client::connect::dns::TokioThreadpoolGaiResolver;
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
-    hyper: Arc<HyperClient<HttpsConnector<HttpConnector>>>,
+    hyper: Arc<HyperClient<HttpsConnector<HttpConnector<TokioThreadpoolGaiResolver>>>>,
     template: RequestTemplate,
     timeout: Duration,
 }
@@ -45,16 +45,11 @@ impl Client {
     ///     .api_key("<your ingestion key>")
     ///     .build()
     ///     .expect("RequestTemplate::builder()");
-    /// let client = Client::new(request_template, &mut rt);
+    /// let client = Client::new(request_template);
     /// ```
-    pub fn new(template: RequestTemplate, runtime: &mut Runtime) -> Self {
-        let exec = runtime.executor();
-        let reactor = runtime.reactor().clone();
-
+    pub fn new(template: RequestTemplate) -> Self {
         let http_connector = {
-            let mut connector = HttpConnector::new_with_executor(
-                exec, Some(reactor),
-            );
+            let mut connector = HttpConnector::new_with_tokio_threadpool_resolver();
             connector.enforce_http(false); // this is needed or https:// urls will error
             connector
         };
