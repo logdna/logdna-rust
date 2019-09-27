@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
+use std::iter::FromIterator;
 use std::ops::{Deref, DerefMut};
 
 use chrono::Utc;
@@ -221,5 +222,13 @@ impl KeyValueMap {
     pub fn remove<'a, T: Into<&'a String>>(mut self, key: T) -> Self {
         self.0.remove(key.into());
         self
+    }
+}
+
+impl From<BTreeMap<String,String>> for KeyValueMap {
+    fn from(map: BTreeMap<String, String>) -> Self {
+        Self {
+            0: HashMap::from_iter(map),
+        }
     }
 }
