@@ -1,20 +1,16 @@
-use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::{future, Stream};
-use futures::future::Future;
 pub use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
+use hyper::client::connect::dns::TokioThreadpoolGaiResolver;
 use hyper::client::HttpConnector;
-use hyper_rustls::HttpsConnector;
-use rustls::ClientConfig as TlsConfig;
+use hyper_tls::HttpsConnector;
 use tokio::timer::Timeout;
 
 use crate::body::IngestBody;
 use crate::error::HttpError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
-use hyper::client::connect::dns::TokioThreadpoolGaiResolver;
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
@@ -54,14 +50,8 @@ impl Client {
             connector
         };
 
-        let tls_config = {
-            let mut cfg = TlsConfig::new();
-            cfg.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
-            cfg.ct_logs = Some(&ct_logs::LOGS);
-            cfg
-        };
-
-        let https_connector = HttpsConnector::from((http_connector, tls_config));
+        let tls = native_tls::TlsConnector::new().expect("TlsConnector::new()");
+        let https_connector = HttpsConnector::from((http_connector, tls.into()));
 
         Client {
             hyper: Arc::new(
@@ -80,47 +70,38 @@ impl Client {
     /// Send an IngestBody to the LogDNA Ingest API
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
-    pub fn send<T>(&self, body: T) -> IngestResponse<T>
-        where T: Deref<Target=IngestBody> + Send + 'static,
-              T: Clone,
-    {
-        let hyper = self.hyper.clone();
-        let tmp_body = body.clone();
-        let tmp_body1 = body.clone();
-        let timeout = self.timeout.clone();
-        Box::new(
-            self.template.new_request(body.clone())
-                .map_err(HttpError::from)
-                .and_then(move |req|
-                    Timeout::new(
-                        hyper.request(req)
-                            .map_err(move |e| HttpError::Send(body, e)),
-                        timeout,
-                    ).map_err(move |e| {
-                        match e.into_inner() {
-                            Some(e) => e,
-                            None => HttpError::Timeout(tmp_body),
-                        }
-                    })
-                )
-                .and_then(|res| {
-                    let status = res.status();
-                    res.into_body()
-                        .map_err(Into::into)
-                        .fold(Vec::new(), |mut vec, chunk| {
-                            vec.extend_from_slice(&*chunk);
-                            future::ok::<_, HttpError<T>>(vec)
-                        })
-                        .and_then(|body| String::from_utf8(body).map_err(Into::into))
-                        .map(move |reason| (status, reason))
-                })
-                .map(move |(status, reason)| {
-                    if status.as_u16() < 200 || status.as_u16() >= 300 {
-                        Response::Failed(tmp_body1, status, reason)
-                    } else {
-                        Response::Sent
-                    }
-                })
-        )
+    pub async fn send<T: AsRef<IngestBody>>(&self, body: T) -> IngestResponse<T> {
+        let request = self.template.new_request(body.as_ref())?;
+        let timeout = Timeout::new(
+            self.hyper.request(request),
+            self.timeout,
+        );
+
+        let result = match timeout.await {
+            Ok(result) => result,
+            Err(_) => {
+                return Err(HttpError::Timeout(body));
+            }
+        };
+
+        let mut response = match result {
+            Ok(response) => response,
+            Err(e) => {
+                return Err(HttpError::Send(body, e));
+            }
+        };
+
+        let status = response.status().as_u16();
+        if status < 200 || status >= 300 {
+            let mut response_body = Vec::new();
+            while let Some(chunk) = response.body_mut().next().await {
+                if let Ok(chunk) = chunk {
+                    response_body.extend_from_slice(&chunk)
+                }
+            };
+            Ok(Response::Failed(body, response.status(), String::from_utf8(response_body)?))
+        } else {
+            Ok(Response::Sent)
+        }
     }
 }

@@ -87,8 +87,6 @@
 //! [Tokio Runtume]: https://docs.rs/tokio/latest/tokio/runtime/index.html
 
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 extern crate quick_error;
 
 /// Log line and body types
@@ -107,7 +105,6 @@ pub mod response;
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::sync::Arc;
 
     use tokio::runtime::Runtime;
 
@@ -119,7 +116,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let mut rt = Runtime::new().expect("Runtime::new()");
+        let rt = Runtime::new().expect("Runtime::new()");
         let params = Params::builder()
             .hostname("rust-client-test")
             .ip("127.0.0.1")
@@ -144,11 +141,12 @@ mod tests {
             .labels(labels)
             .annotations(annotations)
             .build().expect("Line::builder()");
-        println!("{}", serde_json::to_string(&IngestBody::new(vec![line.clone()])).unwrap());
-        assert_eq!(Response::Sent,
-                   rt.block_on(
-                       client.send(Arc::new(IngestBody::new(vec![line])))
-                   ).unwrap()
-        )
+        rt.spawn(async move {
+            assert_eq!(
+                Response::Sent,
+                client.send(IngestBody::new(vec![line])).await.unwrap()
+            )
+        });
+        rt.shutdown_on_idle();
     }
 }

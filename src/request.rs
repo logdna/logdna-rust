@@ -1,8 +1,5 @@
-use std::ops::Deref;
-
 use chrono::Utc;
 use flate2::Compression;
-use futures::Future;
 use http::{HttpTryFrom, Method};
 use http::header::ACCEPT_CHARSET;
 use http::header::CONTENT_ENCODING;
@@ -11,12 +8,9 @@ use http::header::HeaderValue;
 use http::request::Builder as RequestBuilder;
 use hyper::{Body, Request};
 
-use crate::body::{IngestBody, into_http_body};
+use crate::body::IngestBody;
 use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
-
-///type alias for a request used by the client
-pub type IngestRequest = Box<dyn Future<Item=Request<Body>, Error=RequestError> + Send + 'static>;
 
 /// A reusable template to generate requests from
 #[derive(Debug)]
@@ -47,7 +41,7 @@ impl RequestTemplate {
         TemplateBuilder::new()
     }
     /// Uses the template to create a new request
-    pub fn new_request<T: Deref<Target=IngestBody> + Send + 'static>(&self, body: T) -> IngestRequest {
+    pub fn new_request(&self, body: &IngestBody) -> Result<Request<Body>, RequestError> {
         let mut builder = RequestBuilder::new();
 
         let params = serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))
@@ -60,12 +54,9 @@ impl RequestTemplate {
             .uri(self.schema.to_string() + &self.host + &self.endpoint + "?" + &params);
 
         self.encoding.set_builder_encoding(&mut builder);
+        let body = body.as_http_body(&self.encoding)?;
 
-        Box::new(
-            into_http_body(body, self.encoding.clone())
-                .map_err(RequestError::from)
-                .and_then(move |body| builder.body(body).map_err(Into::into))
-        )
+        Ok(builder.body(body)?)
     }
 }
 

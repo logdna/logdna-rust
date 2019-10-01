@@ -15,10 +15,7 @@ quick_error! {
      }
 }
 
-pub enum HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
-          T: Clone,
-{
+pub enum HttpError<T: AsRef<IngestBody>> {
     Build(RequestError),
     Send(T, hyper::error::Error),
     Timeout(T),
@@ -26,37 +23,26 @@ pub enum HttpError<T>
     Utf8(std::string::FromUtf8Error),
 }
 
-impl<T> From<RequestError> for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
-          T: Clone,
+impl<T: AsRef<IngestBody>> From<RequestError> for HttpError<T>
 {
     fn from(e: RequestError) -> HttpError<T> {
         HttpError::Build(e)
     }
 }
 
-impl<T> From<hyper::error::Error> for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
-          T: Clone,
-{
+impl<T: AsRef<IngestBody>> From<hyper::error::Error> for HttpError<T> {
     fn from(e: hyper::error::Error) -> HttpError<T> {
         HttpError::Hyper(e)
     }
 }
 
-impl<T> From<std::string::FromUtf8Error> for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
-          T: Clone,
-{
+impl<T: AsRef<IngestBody>> From<std::string::FromUtf8Error> for HttpError<T> {
     fn from(e: std::string::FromUtf8Error) -> HttpError<T> {
         HttpError::Utf8(e)
     }
 }
 
-impl<T> Display for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
-          T: Clone,
-{
+impl<T: AsRef<IngestBody>> Display for HttpError<T> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
             HttpError::Send(_, ref e) => { write!(f, "{}", e) }
@@ -68,10 +54,7 @@ impl<T> Display for HttpError<T>
     }
 }
 
-impl<T> Debug for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
-          T: Clone,
-{
+impl<T: AsRef<IngestBody>> Debug for HttpError<T> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         Display::fmt(self, f)
     }
@@ -84,9 +67,6 @@ quick_error! {
              from()
         }
         Gzip(err: std::io::Error) {
-             from()
-        }
-        Canceled(err: futures::sync::oneshot::Canceled) {
              from()
         }
      }

@@ -1,11 +1,9 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 use std::ops::{Deref, DerefMut};
 
 use chrono::Utc;
 use flate2::write::GzEncoder;
-use futures::{future, IntoFuture};
-use futures::future::Future;
 use hyper::Body;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,9 +11,6 @@ use serde_json::Value;
 use crate::error::BodyError;
 use crate::error::LineError;
 use crate::request::Encoding;
-
-/// HTTP body type alias
-pub type HttpBody = Box<dyn Future<Item=Body, Error=BodyError> + Send + 'static>;
 
 /// Type used to construct a body for an IngestRequest
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -28,28 +23,20 @@ impl IngestBody {
     pub fn new(lines: Vec<Line>) -> Self {
         Self { lines }
     }
-}
 
-/// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
-pub fn into_http_body<T: Deref<Target=IngestBody> + Send + 'static>(body: T, encoding: Encoding) -> HttpBody {
-    match encoding {
-        Encoding::GzipJson(level) =>
-            Box::new(
-                future::ok(GzEncoder::new(Vec::new(), level))
-                    .and_then(move |mut encoder|
-                        serde_json::to_writer(&mut encoder, body.deref())
-                            .map_err(BodyError::from)
-                            .and_then(move |_| encoder.finish().map_err(Into::into))
-                    )
-                    .map(|bytes| Body::from(bytes))
-            ),
-        Encoding::Json =>
-            Box::new(
-                serde_json::to_vec(body.deref())
-                    .map(|bytes| Body::from(bytes))
-                    .map_err(BodyError::from)
-                    .into_future()
-            )
+    /// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
+    pub fn as_http_body(&self, encoding: &Encoding) -> Result<Body, BodyError> {
+        match encoding {
+            Encoding::GzipJson(level) => {
+                let mut encoder = GzEncoder::new(Vec::new(), level.clone());
+                serde_json::to_writer(&mut encoder, self)?;
+                Ok(Body::from(encoder.finish()?))
+            }
+            Encoding::Json => {
+                let bytes = serde_json::to_vec(self)?;
+                Ok(Body::from(bytes))
+            }
+        }
     }
 }
 
@@ -114,7 +101,7 @@ pub struct LineBuilder {
     pub labels: Option<KeyValueMap>,
     pub level: Option<String>,
     pub line: Option<String>,
-    pub meta: Option<Value>
+    pub meta: Option<Value>,
 }
 
 impl LineBuilder {
@@ -190,6 +177,12 @@ impl LineBuilder {
     }
 }
 
+impl AsRef<IngestBody> for IngestBody {
+    fn as_ref(&self) -> &IngestBody {
+        self
+    }
+}
+
 /// Json key value map (json object with a depth of 1)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeyValueMap(HashMap<String, String>);
@@ -225,7 +218,7 @@ impl KeyValueMap {
     }
 }
 
-impl From<BTreeMap<String,String>> for KeyValueMap {
+impl From<BTreeMap<String, String>> for KeyValueMap {
     fn from(map: BTreeMap<String, String>) -> Self {
         Self {
             0: HashMap::from_iter(map),
