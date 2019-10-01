@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 pub use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
@@ -14,7 +13,7 @@ use crate::response::{IngestResponse, Response};
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
-    hyper: Arc<HyperClient<HttpsConnector<HttpConnector<TokioThreadpoolGaiResolver>>>>,
+    hyper: HyperClient<HttpsConnector<HttpConnector<TokioThreadpoolGaiResolver>>>,
     template: RequestTemplate,
     timeout: Duration,
 }
@@ -54,11 +53,9 @@ impl Client {
         let https_connector = HttpsConnector::from((http_connector, tls.into()));
 
         Client {
-            hyper: Arc::new(
-                HyperClient::builder()
+            hyper: HyperClient::builder()
                     .max_idle_per_host(20)
-                    .build(https_connector)
-            ),
+                    .build(https_connector),
             template,
             timeout: Duration::from_secs(5),
         }
