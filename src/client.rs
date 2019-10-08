@@ -15,6 +15,7 @@ use crate::error::HttpError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
 use hyper::client::connect::dns::TokioThreadpoolGaiResolver;
+use serde::Serialize;
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
@@ -81,7 +82,7 @@ impl Client {
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
     pub fn send<T>(&self, body: T) -> IngestResponse<T>
-        where T: Deref<Target=IngestBody> + Send + 'static,
+        where T: Serialize + Send + 'static,
               T: Clone,
     {
         let hyper = self.hyper.clone();

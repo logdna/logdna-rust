@@ -31,13 +31,13 @@ impl IngestBody {
 }
 
 /// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
-pub fn into_http_body<T: Deref<Target=IngestBody> + Send + 'static>(body: T, encoding: Encoding) -> HttpBody {
+pub fn into_http_body<T: Serialize + Send + 'static>(body: T, encoding: Encoding) -> HttpBody {
     match encoding {
         Encoding::GzipJson(level) =>
             Box::new(
                 future::ok(GzEncoder::new(Vec::new(), level))
                     .and_then(move |mut encoder|
-                        serde_json::to_writer(&mut encoder, body.deref())
+                        serde_json::to_writer(&mut encoder, &body)
                             .map_err(BodyError::from)
                             .and_then(move |_| encoder.finish().map_err(Into::into))
                     )
@@ -45,7 +45,7 @@ pub fn into_http_body<T: Deref<Target=IngestBody> + Send + 'static>(body: T, enc
             ),
         Encoding::Json =>
             Box::new(
-                serde_json::to_vec(body.deref())
+                serde_json::to_vec(&body)
                     .map(|bytes| Body::from(bytes))
                     .map_err(BodyError::from)
                     .into_future()

@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display, Error as FmtError, Formatter};
 use std::ops::Deref;
 
 use crate::body::IngestBody;
+use serde::Serialize;
 
 quick_error! {
      #[derive(Debug)]
@@ -16,7 +17,7 @@ quick_error! {
 }
 
 pub enum HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
+    where T: Serialize + Send + 'static,
           T: Clone,
 {
     Build(RequestError),
@@ -27,7 +28,7 @@ pub enum HttpError<T>
 }
 
 impl<T> From<RequestError> for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
+    where T: Serialize + Send + 'static,
           T: Clone,
 {
     fn from(e: RequestError) -> HttpError<T> {
@@ -36,7 +37,7 @@ impl<T> From<RequestError> for HttpError<T>
 }
 
 impl<T> From<hyper::error::Error> for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
+    where T: Serialize + Send + 'static,
           T: Clone,
 {
     fn from(e: hyper::error::Error) -> HttpError<T> {
@@ -45,7 +46,7 @@ impl<T> From<hyper::error::Error> for HttpError<T>
 }
 
 impl<T> From<std::string::FromUtf8Error> for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
+    where T: Serialize + Send + 'static,
           T: Clone,
 {
     fn from(e: std::string::FromUtf8Error) -> HttpError<T> {
@@ -54,7 +55,7 @@ impl<T> From<std::string::FromUtf8Error> for HttpError<T>
 }
 
 impl<T> Display for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
+    where T: Serialize + Send + 'static,
           T: Clone,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
@@ -69,7 +70,7 @@ impl<T> Display for HttpError<T>
 }
 
 impl<T> Debug for HttpError<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
+    where T: Serialize + Send + 'static,
           T: Clone,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {

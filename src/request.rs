@@ -14,6 +14,7 @@ use hyper::{Body, Request};
 use crate::body::{IngestBody, into_http_body};
 use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
+use serde::Serialize;
 
 ///type alias for a request used by the client
 pub type IngestRequest = Box<dyn Future<Item=Request<Body>, Error=RequestError> + Send + 'static>;
@@ -47,7 +48,7 @@ impl RequestTemplate {
         TemplateBuilder::new()
     }
     /// Uses the template to create a new request
-    pub fn new_request<T: Deref<Target=IngestBody> + Send + 'static>(&self, body: T) -> IngestRequest {
+    pub fn new_request<T: Serialize + Send + 'static>(&self, body: T) -> IngestRequest {
         let mut builder = RequestBuilder::new();
 
         let params = serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))

@@ -5,11 +5,12 @@ use http::StatusCode;
 
 use crate::body::IngestBody;
 use crate::error::HttpError;
+use serde::Serialize;
 
 /// A response from the LogDNA Ingest API
 #[derive(Debug, PartialEq)]
 pub enum Response<T>
-    where T: Deref<Target=IngestBody> + Send + 'static,
+    where T: Serialize + Send + 'static,
           T: Clone,
 {
     Sent,

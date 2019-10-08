@@ -145,7 +145,7 @@ mod tests {
         println!("{}", serde_json::to_string(&IngestBody::new(vec![line.clone()])).unwrap());
         assert_eq!(Response::Sent,
                    rt.block_on(
-                       client.send(Arc::new(IngestBody::new(vec![line])))
+                       client.send(IngestBody::new(vec![line]))
                    ).unwrap()
         )
     }
