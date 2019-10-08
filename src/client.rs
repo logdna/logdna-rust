@@ -6,6 +6,8 @@ pub use hyper::{body, client::Builder as HyperBuilder, Client as HyperClient};
 use hyper_rustls::HttpsConnector;
 use tokio::time::timeout;
 
+use rustls_native_certs;
+
 use crate::body::IngestBody;
 use crate::error::HttpError;
 use crate::request::RequestTemplate;
@@ -49,7 +51,9 @@ impl Client {
             connector
         };
 
-        let tls = rustls::ClientConfig::new();
+        let mut tls = rustls::ClientConfig::new();
+        tls.root_store = rustls_native_certs::load_native_certs()
+               .expect("could not load platform certs");
         let https_connector = hyper_rustls::HttpsConnector::from((http_connector, tls));
 
         Client {
@@ -67,14 +71,15 @@ impl Client {
     /// Send an IngestBody to the LogDNA Ingest API
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
-    pub async fn send<T: AsRef<IngestBody>>(&self, body: T) -> IngestResponse<T> {
-        let request = self.template.new_request(body.as_ref())?;
+    pub async fn send(&self, body: IngestBody) -> IngestResponse
+    {
+        let request = self.template.new_request(&body)?;
         let timeout = timeout(self.timeout, self.hyper.request(request));
 
         let result = match timeout.await {
             Ok(result) => result,
             Err(_) => {
-                return Err(HttpError::Timeout(body));
+                return Err(HttpError::Timeout(body.clone()));
             }
         };
 

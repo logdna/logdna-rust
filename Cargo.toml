@@ -19,6 +19,7 @@ flate2 = "1"
 
 #tls
 rustls = "0.18"
+rustls-native-certs = "0.4"
 hyper-rustls = "0.21"
 
 #utils

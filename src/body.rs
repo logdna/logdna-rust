@@ -26,20 +26,21 @@ impl IngestBody {
 
     /// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
     pub fn as_http_body(&self, encoding: &Encoding) -> Result<Body, BodyError> {
-        match encoding {
-            Encoding::GzipJson(level) => {
-                let mut encoder = GzEncoder::new(Vec::new(), *level);
-                serde_json::to_writer(&mut encoder, self)?;
-                Ok(Body::from(encoder.finish()?))
+            match encoding {
+                Encoding::GzipJson(level) => {
+                    let mut encoder = GzEncoder::new(Vec::new(), *level);
+                    serde_json::to_writer(&mut encoder, &self)?;
+                    Ok(Body::from(encoder.finish()?))
+                }
+                Encoding::Json => {
+                    let bytes = serde_json::to_vec(&self)?;
+                    Ok(Body::from(bytes))
+                }
             }
-            Encoding::Json => {
-                let bytes = serde_json::to_vec(self)?;
-                Ok(Body::from(bytes))
-            }
-        }
     }
-}
 
+
+}
 /// Defines a log line, marking none required fields as Option
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Line {

@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let rt = Runtime::new().expect("Runtime::new()");
+        let mut rt = Runtime::new().expect("Runtime::new()");
         let params = Params::builder()
             .hostname("rust-client-test")
             .ip("127.0.0.1")
@@ -124,7 +124,7 @@ mod tests {
             .build()
             .expect("Params::builder()");
         let request_template = RequestTemplate::builder()
-            .host("logs.logdna.com")
+            .host(env::var("LOGDNA_HOST").expect("logs.logdna.com"))
             .params(params)
             .api_key(env::var("API_KEY").expect("api key missing"))
             .build()
@@ -142,13 +142,12 @@ mod tests {
             .level("INFO")
             .labels(labels)
             .annotations(annotations)
-            .build()
-            .expect("Line::builder()");
-        rt.spawn(async move {
-            assert_eq!(
-                Response::Sent,
-                client.send(IngestBody::new(vec![line])).await.unwrap()
-            )
-        });
+            .build().expect("Line::builder()");
+        println!("{}", serde_json::to_string(&IngestBody::new(vec![line.clone()])).unwrap());
+        assert_eq!(Response::Sent,
+                   rt.block_on(
+                       client.send(IngestBody::new(vec![line]))
+                   ).unwrap()
+        )
     }
 }

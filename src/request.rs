@@ -46,7 +46,7 @@ impl RequestTemplate {
         TemplateBuilder::new()
     }
     /// Uses the template to create a new request
-    pub fn new_request(&self, body: &IngestBody) -> Result<Request<Body>, RequestError> {
+    pub fn new_request(&self, body: &IngestBody) -> Result<Request<Body>, RequestError>{
         let builder = RequestBuilder::new();
 
         let params =
