@@ -55,8 +55,6 @@ impl Client {
         Client {
             hyper: HyperClient::builder()
                 .pool_max_idle_per_host(20)
-                .http1_writev(false)
-                .http1_max_buf_size(8192)
                 .build(https_connector),
             template,
             timeout: Duration::from_secs(5),
