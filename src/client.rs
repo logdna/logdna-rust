@@ -2,10 +2,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::{future, Stream};
 use futures::future::Future;
-pub use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
+use futures::{future, Stream};
 use hyper::client::HttpConnector;
+pub use hyper::{client::Builder as HyperBuilder, Client as HyperClient};
 use hyper_rustls::HttpsConnector;
 use rustls::ClientConfig as TlsConfig;
 use tokio::timer::Timeout;
@@ -57,7 +57,8 @@ impl Client {
 
         let tls_config = {
             let mut cfg = TlsConfig::new();
-            cfg.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+            cfg.root_store
+                .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
             cfg.ct_logs = Some(&ct_logs::LOGS);
             cfg
         };
@@ -68,7 +69,7 @@ impl Client {
             hyper: Arc::new(
                 HyperClient::builder()
                     .max_idle_per_host(20)
-                    .build(https_connector)
+                    .build(https_connector),
             ),
             template,
             timeout: Duration::from_secs(5),
@@ -82,28 +83,30 @@ impl Client {
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
     pub fn send<T>(&self, body: T) -> IngestResponse<T>
-        where T: Serialize + Send + 'static,
-              T: Clone,
+    where
+        T: Serialize + Send + 'static,
+        T: Clone,
     {
         let hyper = self.hyper.clone();
         let tmp_body = body.clone();
         let tmp_body1 = body.clone();
         let timeout = self.timeout.clone();
         Box::new(
-            self.template.new_request(body.clone())
+            self.template
+                .new_request(body.clone())
                 .map_err(HttpError::from)
-                .and_then(move |req|
+                .and_then(move |req| {
                     Timeout::new(
-                        hyper.request(req)
+                        hyper
+                            .request(req)
                             .map_err(move |e| HttpError::Send(body, e)),
                         timeout,
-                    ).map_err(move |e| {
-                        match e.into_inner() {
-                            Some(e) => e,
-                            None => HttpError::Timeout(tmp_body),
-                        }
+                    )
+                    .map_err(move |e| match e.into_inner() {
+                        Some(e) => e,
+                        None => HttpError::Timeout(tmp_body),
                     })
-                )
+                })
                 .and_then(|res| {
                     let status = res.status();
                     res.into_body()
@@ -121,7 +124,7 @@ impl Client {
                     } else {
                         Response::Sent
                     }
-                })
+                }),
         )
     }
 }

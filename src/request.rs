@@ -1,23 +1,22 @@
-use std::ops::Deref;
-
 use chrono::Utc;
 use flate2::Compression;
 use futures::Future;
-use http::{HttpTryFrom, Method};
-use http::header::ACCEPT_CHARSET;
+use http::header::HeaderValue;
 use http::header::CONTENT_ENCODING;
 use http::header::CONTENT_TYPE;
-use http::header::HeaderValue;
+use http::header::{ACCEPT_CHARSET, USER_AGENT};
 use http::request::Builder as RequestBuilder;
+use http::{HttpTryFrom, Method};
 use hyper::{Body, Request};
 
-use crate::body::{IngestBody, into_http_body};
+use crate::body::{into_http_body, IngestBody};
 use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
 use serde::Serialize;
 
 ///type alias for a request used by the client
-pub type IngestRequest = Box<dyn Future<Item=Request<Body>, Error=RequestError> + Send + 'static>;
+pub type IngestRequest =
+    Box<dyn Future<Item = Request<Body>, Error = RequestError> + Send + 'static>;
 
 /// A reusable template to generate requests from
 #[derive(Debug)]
@@ -28,6 +27,8 @@ pub struct RequestTemplate {
     pub charset: HeaderValue,
     /// Content type, default is application/json
     pub content: HeaderValue,
+    /// User agent header
+    pub user_agent: HeaderValue,
     /// Content encoding, default is gzip
     pub encoding: Encoding,
     /// Http schema, default is https
@@ -51,12 +52,15 @@ impl RequestTemplate {
     pub fn new_request<T: Serialize + Send + 'static>(&self, body: T) -> IngestRequest {
         let mut builder = RequestBuilder::new();
 
-        let params = serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))
-            .expect("cant'fail!");
+        let params =
+            serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))
+                .expect("cant'fail!");
 
-        builder.method(self.method.clone())
+        builder
+            .method(self.method.clone())
             .header(ACCEPT_CHARSET, self.charset.clone())
             .header(CONTENT_TYPE, self.content.clone())
+            .header(USER_AGENT, self.user_agent.clone())
             .header("apiKey", self.api_key.clone())
             .uri(self.schema.to_string() + &self.host + &self.endpoint + "?" + &params);
 
@@ -65,7 +69,7 @@ impl RequestTemplate {
         Box::new(
             into_http_body(body, self.encoding.clone())
                 .map_err(RequestError::from)
-                .and_then(move |body| builder.body(body).map_err(Into::into))
+                .and_then(move |body| builder.body(body).map_err(Into::into)),
         )
     }
 }
@@ -75,6 +79,7 @@ pub struct TemplateBuilder {
     method: Method,
     charset: HeaderValue,
     content: HeaderValue,
+    user_agent: HeaderValue,
     encoding: Encoding,
     schema: Schema,
     host: String,
@@ -98,6 +103,11 @@ impl TemplateBuilder {
             method: Method::POST,
             charset: HeaderValue::from_str("utf8").expect("charset::from_str()"),
             content: HeaderValue::from_str("application/json").expect("content::from_str()"),
+            user_agent: HeaderValue::from_static(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            )),
             encoding: Encoding::GzipJson(Compression::new(2)),
             schema: Schema::Https,
             host: "logs.logdna.com".into(),
@@ -114,7 +124,8 @@ impl TemplateBuilder {
     }
     /// Set the charset field
     pub fn charset<T>(&mut self, charset: T) -> &mut Self
-        where HeaderValue: HttpTryFrom<T>
+    where
+        HeaderValue: HttpTryFrom<T>,
     {
         self.charset = match HttpTryFrom::try_from(charset) {
             Ok(v) => v,
@@ -127,7 +138,8 @@ impl TemplateBuilder {
     }
     /// Set the content field
     pub fn content<T>(&mut self, content: T) -> &mut Self
-        where HeaderValue: HttpTryFrom<T>
+    where
+        HeaderValue: HttpTryFrom<T>,
     {
         self.content = match HttpTryFrom::try_from(content) {
             Ok(v) => v,
@@ -174,14 +186,17 @@ impl TemplateBuilder {
             method: self.method.clone(),
             charset: self.charset.clone(),
             content: self.content.clone(),
+            user_agent: self.user_agent.clone(),
             encoding: self.encoding.clone(),
             schema: self.schema.clone(),
             host: self.host.clone(),
             endpoint: self.endpoint.clone(),
-            params: self.params.clone()
-                .ok_or(TemplateError::RequiredField("params is required in a TemplateBuilder".into()))?,
-            api_key: self.api_key.clone()
-                .ok_or(TemplateError::RequiredField("api_key is required in a TemplateBuilder".to_string()))?,
+            params: self.params.clone().ok_or(TemplateError::RequiredField(
+                "params is required in a TemplateBuilder".into(),
+            ))?,
+            api_key: self.api_key.clone().ok_or(TemplateError::RequiredField(
+                "api_key is required in a TemplateBuilder".to_string(),
+            ))?,
         })
     }
 }

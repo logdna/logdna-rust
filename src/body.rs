@@ -1,11 +1,11 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 use std::ops::{Deref, DerefMut};
 
 use chrono::Utc;
 use flate2::write::GzEncoder;
-use futures::{future, IntoFuture};
 use futures::future::Future;
+use futures::{future, IntoFuture};
 use hyper::Body;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -15,12 +15,12 @@ use crate::error::LineError;
 use crate::request::Encoding;
 
 /// HTTP body type alias
-pub type HttpBody = Box<dyn Future<Item=Body, Error=BodyError> + Send + 'static>;
+pub type HttpBody = Box<dyn Future<Item = Body, Error = BodyError> + Send + 'static>;
 
 /// Type used to construct a body for an IngestRequest
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct IngestBody {
-    lines: Vec<Line>
+    lines: Vec<Line>,
 }
 
 impl IngestBody {
@@ -33,23 +33,21 @@ impl IngestBody {
 /// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
 pub fn into_http_body<T: Serialize + Send + 'static>(body: T, encoding: Encoding) -> HttpBody {
     match encoding {
-        Encoding::GzipJson(level) =>
-            Box::new(
-                future::ok(GzEncoder::new(Vec::new(), level))
-                    .and_then(move |mut encoder|
-                        serde_json::to_writer(&mut encoder, &body)
-                            .map_err(BodyError::from)
-                            .and_then(move |_| encoder.finish().map_err(Into::into))
-                    )
-                    .map(|bytes| Body::from(bytes))
-            ),
-        Encoding::Json =>
-            Box::new(
-                serde_json::to_vec(&body)
-                    .map(|bytes| Body::from(bytes))
-                    .map_err(BodyError::from)
-                    .into_future()
-            )
+        Encoding::GzipJson(level) => Box::new(
+            future::ok(GzEncoder::new(Vec::new(), level))
+                .and_then(move |mut encoder| {
+                    serde_json::to_writer(&mut encoder, &body)
+                        .map_err(BodyError::from)
+                        .and_then(move |_| encoder.finish().map_err(Into::into))
+                })
+                .map(|bytes| Body::from(bytes)),
+        ),
+        Encoding::Json => Box::new(
+            serde_json::to_vec(&body)
+                .map(|bytes| Body::from(bytes))
+                .map_err(BodyError::from)
+                .into_future(),
+        ),
     }
 }
 
@@ -69,6 +67,9 @@ pub struct Line {
     /// The file field, e.g /var/log/syslog
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// The host field, e.g node-us-0001
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
     /// The labels field, which is a key value map
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "label")]
@@ -111,10 +112,11 @@ pub struct LineBuilder {
     pub app: Option<String>,
     pub env: Option<String>,
     pub file: Option<String>,
+    pub host: Option<String>,
     pub labels: Option<KeyValueMap>,
     pub level: Option<String>,
     pub line: Option<String>,
-    pub meta: Option<Value>
+    pub meta: Option<Value>,
 }
 
 impl LineBuilder {
@@ -125,6 +127,7 @@ impl LineBuilder {
             app: None,
             env: None,
             file: None,
+            host: None,
             labels: None,
             level: None,
             line: None,
@@ -149,6 +152,11 @@ impl LineBuilder {
     /// Set the file field in the builder
     pub fn file<T: Into<String>>(mut self, file: T) -> Self {
         self.file = Some(file.into());
+        self
+    }
+    /// Set the host field in the builder
+    pub fn host<T: Into<String>>(mut self, host: T) -> Self {
+        self.host = Some(host.into());
         self
     }
     /// Set the level field in the builder
@@ -180,10 +188,12 @@ impl LineBuilder {
             app: self.app,
             env: self.env,
             file: self.file,
+            host: self.host,
             labels: self.labels,
             level: self.level,
             meta: self.meta,
-            line: self.line
+            line: self
+                .line
                 .ok_or(LineError::RequiredField("line field is required".into()))?,
             timestamp: Utc::now().timestamp(),
         })
@@ -225,7 +235,7 @@ impl KeyValueMap {
     }
 }
 
-impl From<BTreeMap<String,String>> for KeyValueMap {
+impl From<BTreeMap<String, String>> for KeyValueMap {
     fn from(map: BTreeMap<String, String>) -> Self {
         Self {
             0: HashMap::from_iter(map),
