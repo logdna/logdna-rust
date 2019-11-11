@@ -56,6 +56,9 @@ pub struct Line {
     /// The file field, e.g /var/log/syslog
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// The host field, e.g node-us-0001
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
     /// The labels field, which is a key value map
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "label")]
@@ -98,6 +101,7 @@ pub struct LineBuilder {
     pub app: Option<String>,
     pub env: Option<String>,
     pub file: Option<String>,
+    pub host: Option<String>,
     pub labels: Option<KeyValueMap>,
     pub level: Option<String>,
     pub line: Option<String>,
@@ -112,6 +116,7 @@ impl LineBuilder {
             app: None,
             env: None,
             file: None,
+            host: None,
             labels: None,
             level: None,
             line: None,
@@ -136,6 +141,11 @@ impl LineBuilder {
     /// Set the file field in the builder
     pub fn file<T: Into<String>>(mut self, file: T) -> Self {
         self.file = Some(file.into());
+        self
+    }
+    /// Set the host field in the builder
+    pub fn host<T: Into<String>>(mut self, host: T) -> Self {
+        self.host = Some(host.into());
         self
     }
     /// Set the level field in the builder
@@ -167,6 +177,7 @@ impl LineBuilder {
             app: self.app,
             env: self.env,
             file: self.file,
+            host: self.host,
             labels: self.labels,
             level: self.level,
             meta: self.meta,
