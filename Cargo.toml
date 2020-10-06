@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Connor Peticca <cjpet10@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -10,14 +10,14 @@ description = "wrapper around LogDNA's Ingest API"
 #error handling
 quick-error = "1"
 #io
-hyper = "0.13.0-alpha.2"
-tokio = "0.2.0-alpha.5"
-futures-preview = "0.3.0-alpha.18"
-http = "0.1"
+hyper = "0.13"
+tokio = "0.2"
+futures = "0.3"
+http = "0.2"
 flate2 = "1"
 #tls
 native-tls = "0.2"
-hyper-tls = "0.4.0-alpha.2"
+hyper-tls = "0.4"
 #utils
 chrono = "0.4"
 #serailzation

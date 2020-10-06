@@ -121,12 +121,14 @@ mod tests {
             .hostname("rust-client-test")
             .ip("127.0.0.1")
             .tags(Tags::parse("this,is,a,test"))
-            .build().expect("Params::builder()");
+            .build()
+            .expect("Params::builder()");
         let request_template = RequestTemplate::builder()
             .host("logs.logdna.com")
             .params(params)
             .api_key(env::var("API_KEY").expect("api key missing"))
-            .build().expect("RequestTemplate::builder()");
+            .build()
+            .expect("RequestTemplate::builder()");
         let client = Client::new(request_template);
         let labels = KeyValueMap::new()
             .add("app", "test")
@@ -140,13 +142,13 @@ mod tests {
             .level("INFO")
             .labels(labels)
             .annotations(annotations)
-            .build().expect("Line::builder()");
+            .build()
+            .expect("Line::builder()");
         rt.spawn(async move {
             assert_eq!(
                 Response::Sent,
                 client.send(IngestBody::new(vec![line])).await.unwrap()
             )
         });
-        rt.shutdown_on_idle();
     }
 }

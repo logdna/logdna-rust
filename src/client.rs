@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-pub use hyper::{Client as HyperClient, client::Builder as HyperBuilder};
-use hyper::client::connect::dns::TokioThreadpoolGaiResolver;
+use hyper::client::connect::dns::GaiResolver;
 use hyper::client::HttpConnector;
+pub use hyper::{body, client::Builder as HyperBuilder, Client as HyperClient};
 use hyper_tls::HttpsConnector;
-use tokio::timer::Timeout;
+use tokio::time::timeout;
 
 use crate::body::IngestBody;
 use crate::error::HttpError;
@@ -13,7 +13,7 @@ use crate::response::{IngestResponse, Response};
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
-    hyper: HyperClient<HttpsConnector<HttpConnector<TokioThreadpoolGaiResolver>>>,
+    hyper: HyperClient<HttpsConnector<HttpConnector<GaiResolver>>>,
     template: RequestTemplate,
     timeout: Duration,
 }
@@ -44,7 +44,7 @@ impl Client {
     /// ```
     pub fn new(template: RequestTemplate) -> Self {
         let http_connector = {
-            let mut connector = HttpConnector::new_with_tokio_threadpool_resolver();
+            let mut connector = HttpConnector::new_with_resolver(GaiResolver::new());
             connector.enforce_http(false); // this is needed or https:// urls will error
             connector
         };
@@ -54,8 +54,8 @@ impl Client {
 
         Client {
             hyper: HyperClient::builder()
-                    .max_idle_per_host(20)
-                    .build(https_connector),
+                .pool_max_idle_per_host(20)
+                .build(https_connector),
             template,
             timeout: Duration::from_secs(5),
         }
@@ -69,10 +69,7 @@ impl Client {
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
     pub async fn send<T: AsRef<IngestBody>>(&self, body: T) -> IngestResponse<T> {
         let request = self.template.new_request(body.as_ref())?;
-        let timeout = Timeout::new(
-            self.hyper.request(request),
-            self.timeout,
-        );
+        let timeout = timeout(self.timeout, self.hyper.request(request));
 
         let result = match timeout.await {
             Ok(result) => result,
@@ -81,22 +78,22 @@ impl Client {
             }
         };
 
-        let mut response = match result {
+        let response = match result {
             Ok(response) => response,
             Err(e) => {
                 return Err(HttpError::Send(body, e));
             }
         };
 
-        let status = response.status().as_u16();
+        let status_code = response.status();
+        let status = status_code.as_u16();
         if status < 200 || status >= 300 {
-            let mut response_body = Vec::new();
-            while let Some(chunk) = response.body_mut().next().await {
-                if let Ok(chunk) = chunk {
-                    response_body.extend_from_slice(&chunk)
-                }
-            };
-            Ok(Response::Failed(body, response.status(), String::from_utf8(response_body)?))
+            let body_bytes = body::to_bytes(response.into_body()).await?;
+            Ok(Response::Failed(
+                body,
+                status_code,
+                std::str::from_utf8(&body_bytes)?.to_string(),
+            ))
         } else {
             Ok(Response::Sent)
         }

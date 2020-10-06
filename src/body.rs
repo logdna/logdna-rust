@@ -15,7 +15,7 @@ use crate::request::Encoding;
 /// Type used to construct a body for an IngestRequest
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct IngestBody {
-    lines: Vec<Line>
+    lines: Vec<Line>,
 }
 
 impl IngestBody {
@@ -28,7 +28,7 @@ impl IngestBody {
     pub fn as_http_body(&self, encoding: &Encoding) -> Result<Body, BodyError> {
         match encoding {
             Encoding::GzipJson(level) => {
-                let mut encoder = GzEncoder::new(Vec::new(), level.clone());
+                let mut encoder = GzEncoder::new(Vec::new(), *level);
                 serde_json::to_writer(&mut encoder, self)?;
                 Ok(Body::from(encoder.finish()?))
             }
@@ -170,10 +170,16 @@ impl LineBuilder {
             labels: self.labels,
             level: self.level,
             meta: self.meta,
-            line: self.line
-                .ok_or(LineError::RequiredField("line field is required".into()))?,
+            line: self
+                .line
+                .ok_or_else(|| LineError::RequiredField("line field is required".into()))?,
             timestamp: Utc::now().timestamp(),
         })
+    }
+}
+impl Default for LineBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -218,6 +224,11 @@ impl KeyValueMap {
     }
 }
 
+impl Default for KeyValueMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl From<BTreeMap<String, String>> for KeyValueMap {
     fn from(map: BTreeMap<String, String>) -> Self {
         Self {

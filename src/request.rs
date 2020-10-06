@@ -1,12 +1,14 @@
 use chrono::Utc;
 use flate2::Compression;
-use http::{HttpTryFrom, Method};
+use http::header::HeaderValue;
 use http::header::ACCEPT_CHARSET;
 use http::header::CONTENT_ENCODING;
 use http::header::CONTENT_TYPE;
-use http::header::HeaderValue;
 use http::request::Builder as RequestBuilder;
+use http::Method;
 use hyper::{Body, Request};
+
+use std::convert::{Into, TryInto};
 
 use crate::body::IngestBody;
 use crate::error::{RequestError, TemplateError};
@@ -42,12 +44,14 @@ impl RequestTemplate {
     }
     /// Uses the template to create a new request
     pub fn new_request(&self, body: &IngestBody) -> Result<Request<Body>, RequestError> {
-        let mut builder = RequestBuilder::new();
+        let builder = RequestBuilder::new();
 
-        let params = serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))
-            .expect("cant'fail!");
+        let params =
+            serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))
+                .expect("cant'fail!");
 
-        builder.method(self.method.clone())
+        let mut builder = builder
+            .method(self.method.clone())
             .header(ACCEPT_CHARSET, self.charset.clone())
             .header(CONTENT_TYPE, self.content.clone())
             .header("apiKey", self.api_key.clone())
@@ -104,12 +108,13 @@ impl TemplateBuilder {
     }
     /// Set the charset field
     pub fn charset<T>(&mut self, charset: T) -> &mut Self
-        where HeaderValue: HttpTryFrom<T>
+    where
+        T: TryInto<HeaderValue, Error = http::Error>,
     {
-        self.charset = match HttpTryFrom::try_from(charset) {
+        self.charset = match charset.try_into() {
             Ok(v) => v,
             Err(e) => {
-                self.err = Some(TemplateError::InvalidHeader(e.into()));
+                self.err = Some(TemplateError::InvalidHeader(e));
                 return self;
             }
         };
@@ -117,12 +122,13 @@ impl TemplateBuilder {
     }
     /// Set the content field
     pub fn content<T>(&mut self, content: T) -> &mut Self
-        where HeaderValue: HttpTryFrom<T>
+    where
+        T: TryInto<HeaderValue, Error = http::Error>,
     {
-        self.content = match HttpTryFrom::try_from(content) {
+        self.content = match content.try_into() {
             Ok(v) => v,
             Err(e) => {
-                self.err = Some(TemplateError::InvalidHeader(e.into()));
+                self.err = Some(TemplateError::InvalidHeader(e));
                 return self;
             }
         };
@@ -168,21 +174,35 @@ impl TemplateBuilder {
             schema: self.schema.clone(),
             host: self.host.clone(),
             endpoint: self.endpoint.clone(),
-            params: self.params.clone()
-                .ok_or(TemplateError::RequiredField("params is required in a TemplateBuilder".into()))?,
-            api_key: self.api_key.clone()
-                .ok_or(TemplateError::RequiredField("api_key is required in a TemplateBuilder".to_string()))?,
+            params: self.params.clone().ok_or_else(|| {
+                TemplateError::RequiredField("params is required in a TemplateBuilder".into())
+            })?,
+            api_key: self.api_key.clone().ok_or_else(|| {
+                TemplateError::RequiredField("api_key is required in a TemplateBuilder".to_string())
+            })?,
         })
+    }
+}
+
+impl Default for TemplateBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl Encoding {
     fn set_builder_encoding<'a>(&self, builder: &'a mut RequestBuilder) -> &'a mut RequestBuilder {
         use crate::request::Encoding::*;
+        {
+            let headers = builder.headers_mut().unwrap();
 
-        match self {
-            GzipJson(_) => builder.header(CONTENT_ENCODING, "gzip"),
-            Json => builder,
+            match self {
+                GzipJson(_) => {
+                    headers.insert(CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+                    builder
+                }
+                Json => builder,
+            }
         }
     }
 }
@@ -194,13 +214,13 @@ pub enum Schema {
     Https,
 }
 
-impl Schema {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for Schema {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use crate::request::Schema::*;
 
         match self {
-            Http => "http://".to_string(),
-            Https => "https://".to_string(),
+            Http => write!(f, "http://"),
+            Https => write!(f, "https://"),
         }
     }
 }

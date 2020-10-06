@@ -1,5 +1,4 @@
 use std::fmt::{Debug, Display, Error as FmtError, Formatter};
-use std::ops::Deref;
 
 use crate::body::IngestBody;
 
@@ -20,11 +19,10 @@ pub enum HttpError<T: AsRef<IngestBody>> {
     Send(T, hyper::error::Error),
     Timeout(T),
     Hyper(hyper::error::Error),
-    Utf8(std::string::FromUtf8Error),
+    Utf8(std::str::Utf8Error),
 }
 
-impl<T: AsRef<IngestBody>> From<RequestError> for HttpError<T>
-{
+impl<T: AsRef<IngestBody>> From<RequestError> for HttpError<T> {
     fn from(e: RequestError) -> HttpError<T> {
         HttpError::Build(e)
     }
@@ -36,8 +34,8 @@ impl<T: AsRef<IngestBody>> From<hyper::error::Error> for HttpError<T> {
     }
 }
 
-impl<T: AsRef<IngestBody>> From<std::string::FromUtf8Error> for HttpError<T> {
-    fn from(e: std::string::FromUtf8Error) -> HttpError<T> {
+impl<T: AsRef<IngestBody>> From<std::str::Utf8Error> for HttpError<T> {
+    fn from(e: std::str::Utf8Error) -> HttpError<T> {
         HttpError::Utf8(e)
     }
 }
@@ -45,11 +43,11 @@ impl<T: AsRef<IngestBody>> From<std::string::FromUtf8Error> for HttpError<T> {
 impl<T: AsRef<IngestBody>> Display for HttpError<T> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
-            HttpError::Send(_, ref e) => { write!(f, "{}", e) }
-            HttpError::Timeout(_) => { write!(f, "request timed out!") }
-            HttpError::Hyper(ref e) => { write!(f, "{}", e) }
-            HttpError::Build(ref e) => { write!(f, "{}", e) }
-            HttpError::Utf8(ref e) => { write!(f, "{}", e) }
+            HttpError::Send(_, ref e) => write!(f, "{}", e),
+            HttpError::Timeout(_) => write!(f, "request timed out!"),
+            HttpError::Hyper(ref e) => write!(f, "{}", e),
+            HttpError::Build(ref e) => write!(f, "{}", e),
+            HttpError::Utf8(ref e) => write!(f, "{}", e),
         }
     }
 }

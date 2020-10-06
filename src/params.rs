@@ -1,7 +1,7 @@
 use std::fmt;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::ParamsError;
 
@@ -80,8 +80,9 @@ impl ParamsBuilder {
     /// Builds a Params instance from the current ParamsBuilder
     pub fn build(&mut self) -> Result<Params, ParamsError> {
         Ok(Params {
-            hostname: self.hostname.clone()
-                .ok_or(ParamsError::RequiredField("hostname is required in a ParamsBuilder".into()))?,
+            hostname: self.hostname.clone().ok_or_else(|| {
+                ParamsError::RequiredField("hostname is required in a ParamsBuilder".into())
+            })?,
             mac: self.mac.clone(),
             ip: self.ip.clone(),
             now: 0,
@@ -90,29 +91,43 @@ impl ParamsBuilder {
     }
 }
 
+impl Default for ParamsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Defines a comma separated list of tags, e.g `this,is,a,test`
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Tags {
-    inner: Vec<String>
+    inner: Vec<String>,
 }
 
 impl Tags {
     /// Constructs an empty instance
     pub fn new() -> Self {
-        Self {
-            inner: Vec::new()
-        }
+        Self { inner: Vec::new() }
     }
     /// Parses a comma separated list of tags into a Tags instance, e.g `this,is,a,test`
     pub fn parse<T: Into<String>>(tags: T) -> Self {
         Self {
-            inner: tags.into().split_terminator(",").map(|s| s.to_string()).collect()
+            inner: tags
+                .into()
+                .split_terminator(',')
+                .map(|s| s.to_string())
+                .collect(),
         }
     }
     /// Manually adds a tag to the list of tags
     pub fn add<T: Into<String>>(&mut self, tag: T) -> &mut Self {
         self.inner.push(tag.into());
         self
+    }
+}
+
+impl Default for Tags {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -128,26 +143,30 @@ impl<'a> From<&'a str> for Tags {
     }
 }
 
-impl From<Vec<String>> for Tags
-{
+impl From<Vec<String>> for Tags {
     fn from(input: Vec<String>) -> Self {
         let mut tags = Tags::new();
-        input.into_iter().for_each(|t| { tags.add(t); });
+        input.into_iter().for_each(|t| {
+            tags.add(t);
+        });
         tags
     }
 }
 
-
 impl Serialize for Tags {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where
+        S: Serializer,
+    {
         serializer.serialize_str(&self.inner.join(","))
     }
 }
 
 impl<'de> Deserialize<'de> for Tags {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         struct StrVisitor {}
 
         impl<'de> Visitor<'de> for StrVisitor {
@@ -159,7 +178,7 @@ impl<'de> Deserialize<'de> for Tags {
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(Tags {
-                    inner: v.split_terminator(",").map(|s| s.to_string()).collect()
+                    inner: v.split_terminator(',').map(|s| s.to_string()).collect(),
                 })
             }
         }
