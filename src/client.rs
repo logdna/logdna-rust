@@ -3,7 +3,7 @@ use std::time::Duration;
 use hyper::client::connect::dns::GaiResolver;
 use hyper::client::HttpConnector;
 pub use hyper::{body, client::Builder as HyperBuilder, Client as HyperClient};
-use hyper_tls::HttpsConnector;
+use hyper_rustls::HttpsConnector;
 use tokio::time::timeout;
 
 use crate::body::IngestBody;
@@ -49,8 +49,8 @@ impl Client {
             connector
         };
 
-        let tls = native_tls::TlsConnector::new().expect("TlsConnector::new()");
-        let https_connector = HttpsConnector::from((http_connector, tls.into()));
+        let tls = rustls::ClientConfig::new();
+        let https_connector = hyper_rustls::HttpsConnector::from((http_connector, tls));
 
         Client {
             hyper: HyperClient::builder()
