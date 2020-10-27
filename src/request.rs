@@ -4,6 +4,7 @@ use http::header::HeaderValue;
 use http::header::ACCEPT_CHARSET;
 use http::header::CONTENT_ENCODING;
 use http::header::CONTENT_TYPE;
+use http::header::USER_AGENT;
 use http::request::Builder as RequestBuilder;
 use http::Method;
 use hyper::{Body, Request};
@@ -23,6 +24,8 @@ pub struct RequestTemplate {
     pub charset: HeaderValue,
     /// Content type, default is application/json
     pub content: HeaderValue,
+    /// User agent header
+    pub user_agent: HeaderValue,
     /// Content encoding, default is gzip
     pub encoding: Encoding,
     /// Http schema, default is https
@@ -54,6 +57,7 @@ impl RequestTemplate {
             .method(self.method.clone())
             .header(ACCEPT_CHARSET, self.charset.clone())
             .header(CONTENT_TYPE, self.content.clone())
+            .header(USER_AGENT, self.user_agent.clone())
             .header("apiKey", self.api_key.clone())
             .uri(self.schema.to_string() + &self.host + &self.endpoint + "?" + &params);
 
@@ -69,6 +73,7 @@ pub struct TemplateBuilder {
     method: Method,
     charset: HeaderValue,
     content: HeaderValue,
+    user_agent: HeaderValue,
     encoding: Encoding,
     schema: Schema,
     host: String,
@@ -92,6 +97,11 @@ impl TemplateBuilder {
             method: Method::POST,
             charset: HeaderValue::from_str("utf8").expect("charset::from_str()"),
             content: HeaderValue::from_str("application/json").expect("content::from_str()"),
+            user_agent: HeaderValue::from_static(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            )),
             encoding: Encoding::GzipJson(Compression::new(2)),
             schema: Schema::Https,
             host: "logs.logdna.com".into(),
@@ -134,11 +144,26 @@ impl TemplateBuilder {
         };
         self
     }
+    /// Set the user-agent field
+    pub fn user_agent<T>(&mut self, user_agent: T) -> &mut Self
+    where
+        T: TryInto<HeaderValue, Error = http::Error>,
+    {
+        self.user_agent = match user_agent.try_into() {
+            Ok(v) => v,
+            Err(e) => {
+                self.err = Some(TemplateError::InvalidHeader(e));
+                return self;
+            }
+        };
+        self
+    }
     /// Set the encoding field
     pub fn encoding<T: Into<Encoding>>(&mut self, encoding: T) -> &mut Self {
         self.encoding = encoding.into();
         self
     }
+
     /// Set the schema field
     pub fn schema<T: Into<Schema>>(&mut self, schema: T) -> &mut Self {
         self.schema = schema.into();
@@ -170,6 +195,7 @@ impl TemplateBuilder {
             method: self.method.clone(),
             charset: self.charset.clone(),
             content: self.content.clone(),
+            user_agent: self.user_agent.clone(),
             encoding: self.encoding.clone(),
             schema: self.schema.clone(),
             host: self.host.clone(),
