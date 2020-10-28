@@ -150,7 +150,7 @@ mod tests {
         );
         assert_eq!(
             Response::Sent,
-            rt.block_on(client.send(IngestBody::new(vec![line])))
+            rt.block_on(client.send(&IngestBody::new(vec![line])))
                 .unwrap()
         )
     }
