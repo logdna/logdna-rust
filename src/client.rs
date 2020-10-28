@@ -69,8 +69,8 @@ impl Client {
     /// Send an IngestBody to the LogDNA Ingest API
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
-    pub async fn send(&self, body: IngestBody) -> IngestResponse {
-        let request = self.template.new_request(&body)?;
+    pub async fn send(&self, body: &IngestBody) -> IngestResponse {
+        let request = self.template.new_request(body)?;
         let timeout = timeout(self.timeout, self.hyper.request(request));
 
         let result = match timeout.await {
@@ -83,7 +83,7 @@ impl Client {
         let response = match result {
             Ok(response) => response,
             Err(e) => {
-                return Err(HttpError::Send(body, e));
+                return Err(HttpError::Send(body.clone(), e));
             }
         };
 
@@ -92,7 +92,7 @@ impl Client {
         if status < 200 || status >= 300 {
             let body_bytes = body::to_bytes(response.into_body()).await?;
             Ok(Response::Failed(
-                body,
+                body.clone(),
                 status_code,
                 std::str::from_utf8(&body_bytes)?.to_string(),
             ))
