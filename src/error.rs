@@ -109,7 +109,7 @@ quick_error! {
 quick_error! {
      #[derive(Debug)]
      pub enum TemplateError {
-        InvalidHeader(err: http::Error) {
+        InvalidHeader(err: http::header::InvalidHeaderValue) {
              from()
         }
         RequiredField(err: std::string::String) {

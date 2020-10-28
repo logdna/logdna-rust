@@ -119,7 +119,7 @@ impl TemplateBuilder {
     /// Set the charset field
     pub fn charset<T>(&mut self, charset: T) -> &mut Self
     where
-        T: TryInto<HeaderValue, Error = http::Error>,
+        T: TryInto<HeaderValue, Error = http::header::InvalidHeaderValue>,
     {
         self.charset = match charset.try_into() {
             Ok(v) => v,
@@ -133,7 +133,7 @@ impl TemplateBuilder {
     /// Set the content field
     pub fn content<T>(&mut self, content: T) -> &mut Self
     where
-        T: TryInto<HeaderValue, Error = http::Error>,
+        T: TryInto<HeaderValue, Error = http::header::InvalidHeaderValue>,
     {
         self.content = match content.try_into() {
             Ok(v) => v,
@@ -147,7 +147,7 @@ impl TemplateBuilder {
     /// Set the user-agent field
     pub fn user_agent<T>(&mut self, user_agent: T) -> &mut Self
     where
-        T: TryInto<HeaderValue, Error = http::Error>,
+        T: TryInto<HeaderValue, Error = http::header::InvalidHeaderValue>,
     {
         self.user_agent = match user_agent.try_into() {
             Ok(v) => v,
