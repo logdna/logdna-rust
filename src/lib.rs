@@ -142,12 +142,16 @@ mod tests {
             .level("INFO")
             .labels(labels)
             .annotations(annotations)
-            .build().expect("Line::builder()");
-        println!("{}", serde_json::to_string(&IngestBody::new(vec![line.clone()])).unwrap());
-        assert_eq!(Response::Sent,
-                   rt.block_on(
-                       client.send(IngestBody::new(vec![line]))
-                   ).unwrap()
+            .build()
+            .expect("Line::builder()");
+        println!(
+            "{}",
+            serde_json::to_string(&IngestBody::new(vec![line.clone()])).unwrap()
+        );
+        assert_eq!(
+            Response::Sent,
+            rt.block_on(client.send(IngestBody::new(vec![line])))
+                .unwrap()
         )
     }
 }

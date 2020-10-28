@@ -15,8 +15,9 @@ quick_error! {
 }
 
 pub enum HttpError<T>
-    where T: Serialize + Send + 'static,
-          T: Clone,
+where
+    T: Serialize + Send + 'static,
+    T: Clone,
 {
     Build(RequestError),
     Send(T, hyper::error::Error),
@@ -27,8 +28,9 @@ pub enum HttpError<T>
 }
 
 impl<T> From<RequestError> for HttpError<T>
-    where T: Serialize + Send + 'static,
-          T: Clone,
+where
+    T: Serialize + Send + 'static,
+    T: Clone,
 {
     fn from(e: RequestError) -> HttpError<T> {
         HttpError::Build(e)
@@ -36,8 +38,9 @@ impl<T> From<RequestError> for HttpError<T>
 }
 
 impl<T> From<hyper::error::Error> for HttpError<T>
-    where T: Serialize + Send + 'static,
-          T: Clone,
+where
+    T: Serialize + Send + 'static,
+    T: Clone,
 {
     fn from(e: hyper::error::Error) -> HttpError<T> {
         HttpError::Hyper(e)
@@ -45,8 +48,9 @@ impl<T> From<hyper::error::Error> for HttpError<T>
 }
 
 impl<T> From<std::string::FromUtf8Error> for HttpError<T>
-    where T: Serialize + Send + 'static,
-          T: Clone,
+where
+    T: Serialize + Send + 'static,
+    T: Clone,
 {
     fn from(e: std::string::FromUtf8Error) -> HttpError<T> {
         HttpError::FromUtf8(e)
@@ -54,8 +58,9 @@ impl<T> From<std::string::FromUtf8Error> for HttpError<T>
 }
 
 impl<T> From<std::str::Utf8Error> for HttpError<T>
-    where T: Serialize + Send + 'static,
-          T: Clone,
+where
+    T: Serialize + Send + 'static,
+    T: Clone,
 {
     fn from(e: std::str::Utf8Error) -> HttpError<T> {
         HttpError::Utf8(e)
@@ -63,8 +68,9 @@ impl<T> From<std::str::Utf8Error> for HttpError<T>
 }
 
 impl<T> Display for HttpError<T>
-    where T: Serialize + Send + 'static,
-          T: Clone,
+where
+    T: Serialize + Send + 'static,
+    T: Clone,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
@@ -79,8 +85,9 @@ impl<T> Display for HttpError<T>
 }
 
 impl<T> Debug for HttpError<T>
-    where T: Serialize + Send + 'static,
-          T: Clone,
+where
+    T: Serialize + Send + 'static,
+    T: Clone,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         Display::fmt(self, f)

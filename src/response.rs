@@ -5,8 +5,7 @@ use crate::error::HttpError;
 
 /// A response from the LogDNA Ingest API
 #[derive(Debug, PartialEq)]
-pub enum Response
-{
+pub enum Response {
     Sent,
     // contains the failed body, a status code and a reason the request failed(String)
     Failed(IngestBody, StatusCode, String),
