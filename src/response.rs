@@ -1,6 +1,5 @@
 use http::StatusCode;
 
-use crate::body::IngestBody;
 use crate::error::HttpError;
 
 /// A response from the LogDNA Ingest API
@@ -8,8 +7,8 @@ use crate::error::HttpError;
 pub enum Response {
     Sent,
     // contains the failed body, a status code and a reason the request failed(String)
-    Failed(IngestBody, StatusCode, String),
+    Failed(Box<crate::body::IngestBodyBuffer>, StatusCode, String),
 }
 
 /// Type alias for a response from `Client::send`
-pub type IngestResponse = Result<Response, HttpError<IngestBody>>;
+pub type IngestResponse = Result<Response, HttpError<crate::body::IngestBodyBuffer>>;

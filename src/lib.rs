@@ -101,6 +101,10 @@ pub mod params;
 pub mod request;
 /// Response types
 pub mod response;
+/// Log line and body serialization
+pub mod serialize;
+
+mod segmented_buffer;
 
 #[cfg(test)]
 mod tests {

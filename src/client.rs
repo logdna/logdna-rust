@@ -6,14 +6,14 @@ pub use hyper::{body, client::Builder as HyperBuilder, Client as HyperClient};
 use hyper_rustls::HttpsConnector;
 use tokio::time::timeout;
 
-use crate::body::IngestBody;
+use crate::body::IngestBodyBuffer;
 use crate::error::HttpError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
-    hyper: HyperClient<HttpsConnector<HttpConnector<GaiResolver>>>,
+    hyper: HyperClient<HttpsConnector<HttpConnector<GaiResolver>>, IngestBodyBuffer>,
     template: RequestTemplate,
     timeout: Duration,
 }
@@ -69,30 +69,39 @@ impl Client {
     /// Send an IngestBody to the LogDNA Ingest API
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
-    pub async fn send(&self, body: &IngestBody) -> IngestResponse {
-        let request = self.template.new_request(body)?;
+    pub async fn send<T>(&self, body: T) -> IngestResponse
+    where
+        T: crate::body::IntoIngestBodyBuffer + std::marker::Send,
+        T::Error: std::fmt::Debug,
+    {
+        println!("serializing");
+        let body = body.into().await.expect("TODO, have send return Result");
+        println!("building request");
+        let request = self.template.new_request(&body).await?;
+        println!("requesting with request {:?}", &request);
         let timeout = timeout(self.timeout, self.hyper.request(request));
 
         let result = match timeout.await {
             Ok(result) => result,
             Err(_) => {
-                return Err(HttpError::Timeout(body.clone()));
+                return Err(HttpError::Timeout(body));
             }
         };
+        println!("Got response");
 
         let response = match result {
             Ok(response) => response,
             Err(e) => {
-                return Err(HttpError::Send(body.clone(), e));
+                return Err(HttpError::Send(body, e));
             }
         };
 
         let status_code = response.status();
         let status = status_code.as_u16();
-        if status < 200 || status >= 300 {
+        if !(200..300).contains(&status) {
             let body_bytes = body::to_bytes(response.into_body()).await?;
             Ok(Response::Failed(
-                body.clone(),
+                Box::new(body),
                 status_code,
                 std::str::from_utf8(&body_bytes)?.to_string(),
             ))

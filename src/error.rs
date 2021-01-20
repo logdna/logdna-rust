@@ -1,23 +1,31 @@
 use std::fmt::{Debug, Display, Error as FmtError, Formatter};
 
-use serde::Serialize;
-
 quick_error! {
-     #[derive(Debug)]
-     pub enum RequestError {
+    #[derive(Debug)]
+    pub enum RequestError {
         Build(err: http::Error) {
+            from()
+        }
+        BuildIo(err: std::io::Error) {
              from()
         }
         Body(err: BodyError) {
-             from()
+            from()
         }
-     }
+    }
 }
+quick_error! {
+    #[derive(Debug)]
+    pub enum IngestBufError{
+        Any(err: &'static str){
+            from()
+        }
 
+    }
+}
 pub enum HttpError<T>
 where
-    T: Serialize + Send + 'static,
-    T: Clone,
+    T: Send + 'static,
 {
     Build(RequestError),
     Send(T, hyper::error::Error),
@@ -25,12 +33,12 @@ where
     Hyper(hyper::error::Error),
     Utf8(std::str::Utf8Error),
     FromUtf8(std::string::FromUtf8Error),
+    Serialization(serde_json::Error),
 }
 
 impl<T> From<RequestError> for HttpError<T>
 where
-    T: Serialize + Send + 'static,
-    T: Clone,
+    T: Send + 'static,
 {
     fn from(e: RequestError) -> HttpError<T> {
         HttpError::Build(e)
@@ -39,8 +47,7 @@ where
 
 impl<T> From<hyper::error::Error> for HttpError<T>
 where
-    T: Serialize + Send + 'static,
-    T: Clone,
+    T: Send + 'static,
 {
     fn from(e: hyper::error::Error) -> HttpError<T> {
         HttpError::Hyper(e)
@@ -49,8 +56,7 @@ where
 
 impl<T> From<std::string::FromUtf8Error> for HttpError<T>
 where
-    T: Serialize + Send + 'static,
-    T: Clone,
+    T: Send + 'static,
 {
     fn from(e: std::string::FromUtf8Error) -> HttpError<T> {
         HttpError::FromUtf8(e)
@@ -59,18 +65,25 @@ where
 
 impl<T> From<std::str::Utf8Error> for HttpError<T>
 where
-    T: Serialize + Send + 'static,
-    T: Clone,
+    T: Send + 'static,
 {
     fn from(e: std::str::Utf8Error) -> HttpError<T> {
         HttpError::Utf8(e)
     }
 }
 
+impl<T> From<serde_json::Error> for HttpError<T>
+where
+    T: Send + 'static,
+{
+    fn from(e: serde_json::Error) -> HttpError<T> {
+        HttpError::Serialization(e)
+    }
+}
+
 impl<T> Display for HttpError<T>
 where
-    T: Serialize + Send + 'static,
-    T: Clone,
+    T: Send + 'static,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
@@ -80,14 +93,14 @@ where
             HttpError::Build(ref e) => write!(f, "{}", e),
             HttpError::Utf8(ref e) => write!(f, "{}", e),
             HttpError::FromUtf8(ref e) => write!(f, "{}", e),
+            HttpError::Serialization(ref e) => write!(f, "{}", e),
         }
     }
 }
 
 impl<T> Debug for HttpError<T>
 where
-    T: Serialize + Send + 'static,
-    T: Clone,
+    T: Send + 'static,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         Display::fmt(self, f)

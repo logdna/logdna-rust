@@ -9,13 +9,21 @@ description = "wrapper around LogDNA's Ingest API"
 [dependencies]
 #error handling
 quick-error = "1"
+thiserror = "1"
 
 #io
+bytes = "0.5"
 hyper = "0.13"
 tokio = "0.2"
-futures = "0.3"
 http = "0.2"
-flate2 = "1"
+async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
+
+# async
+futures = "0.3"
+async-trait = "0.1"
+async-buf-pool =  { git= "ssh://git@github.com:/logdna/async-buf-pool-rs.git", branch="main", version = "*"}
+#async-buf-pool =  { path = "../async-buf-pool", version = "*"}
+pin-project = "1"
 
 #tls
 rustls = "0.18"
@@ -24,8 +32,16 @@ hyper-rustls = "0.21"
 
 #utils
 chrono = "0.4"
+derivative = "2.1"
+smallvec = "1.5"
 
 #serailzation
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_urlencoded = "0.5"
+utf-8 = "0.7"
+
+[dev-dependencies]
+tokio-test = "0.3"
+proptest = "0.10"
+flate2 = "1.0"
