@@ -312,15 +312,6 @@ pub struct IngestLineSerializer {
     pub(crate) buf: serde_json::Serializer<IngestBuffer>,
 }
 
-fn serde_serialize_str_to_buf<T>(buf: T, s: &str) -> Result<T, IngestLineSerializeError>
-where
-    T: std::io::Write,
-{
-    let mut ser = serde_json::Serializer::new(buf);
-    ser.serialize_str(s)?;
-    Ok(ser.into_inner())
-}
-
 fn serde_serialize_key_to_buf<F, T>(
     fmt: &mut F,
     mut wtr: T,
@@ -334,65 +325,28 @@ where
     fmt.begin_object_key(&mut wtr, *first)?;
     *first = false;
 
-    let mut wtr = serde_serialize_str_to_buf(wtr, key)?;
+    let mut ser = serde_json::Serializer::new(wtr);
+    ser.serialize_str(key)?;
+    let mut wtr = ser.into_inner();
+
     fmt.end_object_key(&mut wtr)?;
     fmt.begin_object_value(&mut wtr)?;
     Ok(wtr)
 }
 
-// TODO: tidy these into associated functions
-macro_rules! serialize_map {
+macro_rules! serialize {
     ($a:ident, $b:ident, $c:ident, $d:literal, $f:ident) => {
-        // Infallible
-        let wtr = $a.take().unwrap();
         let mut fmt = serde_json::ser::CompactFormatter {};
 
-        let wtr = serde_serialize_key_to_buf(&mut fmt, wtr, &mut $f, $d)?;
-        let mut ser = IngestLineSerializer::from_buffer(wtr).into_serialize_utf8::<I>();
+        let wtr = serde_serialize_key_to_buf(&mut fmt, $a, &mut $f, $d)?;
+        let mut ser = IngestLineSerializer::from_buffer(wtr).into_serialize_value();
 
-        // Infallible
         $b.$c(&mut ser).await?;
+
         let mut wtr = ser.into_buffer().unwrap();
         fmt.end_object_value(&mut wtr)?;
 
-        $a = Some(wtr);
-    };
-}
-
-macro_rules! serialize_str {
-    ($a:ident, $b:ident, $c:ident, $d:literal, $f:ident) => {
-        // Infallible
-        let wtr = $a.take().unwrap();
-        let mut fmt = serde_json::ser::CompactFormatter {};
-
-        let wtr = serde_serialize_key_to_buf(&mut fmt, wtr, &mut $f, $d)?;
-        let mut ser = IngestLineSerializer::from_buffer(wtr).into_serialize_utf8::<T>();
-
-        $b.$c(&mut ser).await?;
-
-        // Infallible
-        let mut wtr = ser.ser.take().unwrap().buf.into_inner();
-        fmt.end_object_value(&mut wtr)?;
-        $a = Some(wtr);
-    };
-}
-
-macro_rules! serialize_value {
-    ($a:ident, $b:ident, $c:ident, $d:literal, $f:ident) => {
-        // Infallible
-        let wtr = $a.take().unwrap();
-
-        let mut fmt = serde_json::ser::CompactFormatter {};
-
-        let wtr = serde_serialize_key_to_buf(&mut fmt, wtr, &mut $f, $d)?;
-        let mut ser = IngestLineSerializer::from_buffer(wtr).into_serialize_value();
-        // Infallible
-        $b.$c(&mut ser).await?;
-
-        let mut wtr = ser.ser.take().unwrap().buf.into_inner();
-        fmt.end_object_value(&mut wtr)?;
-
-        $a = Some(wtr);
+        $a = wtr;
     };
 }
 
@@ -405,10 +359,6 @@ impl IngestLineSerializer {
 
     pub fn into_inner(self) -> IngestBuffer {
         self.buf.into_inner()
-    }
-
-    pub fn into_serialize_utf8<T>(self) -> IngestBytesSerializer {
-        IngestBytesSerializer { ser: Some(self) }
     }
 
     pub fn into_serialize_value(self) -> IngestBytesSerializer {
@@ -426,57 +376,43 @@ impl IngestLineSerializer {
     {
         let mut fmt = serde_json::ser::CompactFormatter {};
         let mut first = true;
-        let mut s_wtr = self.buf.into_inner();
+        let mut s_wtr = self.into_inner();
         fmt.begin_object(&mut s_wtr)?;
-        let mut s_wtr = Some(s_wtr);
 
         if from.has_annotations() {
-            serialize_map!(s_wtr, from, annotations, "annotation", first);
+            serialize!(s_wtr, from, annotations, "annotation", first);
         }
 
         if from.has_app() {
-            serialize_str!(s_wtr, from, app, "app", first);
+            serialize!(s_wtr, from, app, "app", first);
         }
 
         if from.has_env() {
-            serialize_str!(s_wtr, from, env, "env", first);
+            serialize!(s_wtr, from, env, "env", first);
         }
 
         if from.has_file() {
-            serialize_str!(s_wtr, from, file, "file", first);
+            serialize!(s_wtr, from, file, "file", first);
         }
 
         if from.has_host() {
-            serialize_str!(s_wtr, from, host, "host", first);
+            serialize!(s_wtr, from, host, "host", first);
         }
 
         if from.has_labels() {
-            serialize_map!(s_wtr, from, labels, "label", first);
+            serialize!(s_wtr, from, labels, "label", first);
         }
 
         if from.has_level() {
-            serialize_str!(s_wtr, from, level, "level", first);
+            serialize!(s_wtr, from, level, "level", first);
         }
 
         if from.has_meta() {
-            serialize_value!(s_wtr, from, meta, "meta", first);
+            serialize!(s_wtr, from, meta, "meta", first);
         }
 
-        // Infallible
-        let s_wtr = s_wtr.unwrap();
-        let wtr = serde_serialize_key_to_buf(&mut fmt, s_wtr, &mut first, "line")?;
-        let mut ser = IngestLineSerializer::from_buffer(wtr).into_serialize_utf8::<IngestBuffer>();
-        from.line(&mut ser).await?;
-        // Infallible
-        let mut s_wtr = ser.ser.take().unwrap().buf.into_inner();
-        fmt.end_object_value(&mut s_wtr)?;
-
-        let wtr = serde_serialize_key_to_buf(&mut fmt, s_wtr, &mut first, "timestamp")?;
-        let mut ser = IngestLineSerializer::from_buffer(wtr).into_serialize_utf8::<IngestBuffer>();
-        from.timestamp(&mut ser).await?;
-        // Infallible
-        let mut s_wtr = ser.ser.take().unwrap().buf.into_inner();
-        fmt.end_object_value(&mut s_wtr)?;
+        serialize!(s_wtr, from, line, "line", first);
+        serialize!(s_wtr, from, timestamp, "timestamp", first);
 
         fmt.end_object(&mut s_wtr)?;
         Ok(s_wtr)
