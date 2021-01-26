@@ -71,10 +71,10 @@ impl Client {
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
     pub async fn send<T>(&self, body: T) -> IngestResponse
     where
-        T: crate::body::IntoIngestBodyBuffer + std::marker::Send,
-        T::Error: std::fmt::Debug,
+        T: crate::body::IntoIngestBodyBuffer + Send + Sync,
+        T::Error: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static,
     {
-        let body = body.into().await.expect("TODO, have send return Result");
+        let body = body.into().await.map_err(move |e| HttpError::Other(Box::new(e)))?;
         let request = self.template.new_request(&body).await?;
         let timeout = timeout(self.timeout, self.hyper.request(request));
 

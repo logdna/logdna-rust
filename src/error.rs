@@ -34,6 +34,7 @@ where
     Utf8(std::str::Utf8Error),
     FromUtf8(std::string::FromUtf8Error),
     Serialization(serde_json::Error),
+    Other(Box<dyn std::error::Error>)
 }
 
 impl<T> From<RequestError> for HttpError<T>
@@ -94,6 +95,7 @@ where
             HttpError::Utf8(ref e) => write!(f, "{}", e),
             HttpError::FromUtf8(ref e) => write!(f, "{}", e),
             HttpError::Serialization(ref e) => write!(f, "{}", e),
+            HttpError::Other(ref e) => write!(f, "{}", e),
         }
     }
 }
