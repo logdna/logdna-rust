@@ -19,8 +19,8 @@ use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
 use crate::segmented_buffer::AllocBytesMutFn;
 
-const SERIALIZTION_BUF_INITIAL_CAPACITY: usize = 1024 * 64;
-const SERIALIZTION_BUF_SEGMENT_SIZE: usize = 1024 * 16;
+const SERIALIZATION_BUF_INITIAL_CAPACITY: usize = 1024 * 64;
+const SERIALIZATION_BUF_SEGMENT_SIZE: usize = 1024 * 16;
 
 /// A reusable template to generate requests from
 #[derive(Derivative)]
@@ -79,8 +79,8 @@ impl RequestTemplate {
         match &self.encoding {
             Encoding::GzipJson(level) => {
                 let buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
-                    .segment_size(SERIALIZTION_BUF_SEGMENT_SIZE)
-                    .initial_capacity(SERIALIZTION_BUF_SEGMENT_SIZE)
+                    .segment_size(SERIALIZATION_BUF_SEGMENT_SIZE)
+                    .initial_capacity(SERIALIZATION_BUF_SEGMENT_SIZE)
                     .with_pool(self.pool.clone());
 
                 let mut encoder = GzipEncoder::with_quality(buf, *level);
@@ -227,8 +227,8 @@ impl TemplateBuilder {
     pub fn build(&mut self) -> Result<RequestTemplate, TemplateError> {
         Ok(RequestTemplate {
             pool: async_buf_pool::Pool::<AllocBytesMutFn, bytes::BytesMut>::new(
-                SERIALIZTION_BUF_INITIAL_CAPACITY,
-                Arc::new(|| bytes::BytesMut::with_capacity(SERIALIZTION_BUF_SEGMENT_SIZE)),
+                SERIALIZATION_BUF_INITIAL_CAPACITY,
+                Arc::new(|| bytes::BytesMut::with_capacity(SERIALIZATION_BUF_SEGMENT_SIZE)),
             ),
             method: self.method.clone(),
             charset: self.charset.clone(),

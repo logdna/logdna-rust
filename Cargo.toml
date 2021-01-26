@@ -22,7 +22,6 @@ async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
 futures = "0.3"
 async-trait = "0.1"
 async-buf-pool =  { git= "ssh://git@github.com:/logdna/async-buf-pool-rs.git", branch="main", version = "*"}
-#async-buf-pool =  { path = "../async-buf-pool", version = "*"}
 pin-project = "1"
 
 #tls

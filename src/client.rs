@@ -74,11 +74,8 @@ impl Client {
         T: crate::body::IntoIngestBodyBuffer + std::marker::Send,
         T::Error: std::fmt::Debug,
     {
-        println!("serializing");
         let body = body.into().await.expect("TODO, have send return Result");
-        println!("building request");
         let request = self.template.new_request(&body).await?;
-        println!("requesting with request {:?}", &request);
         let timeout = timeout(self.timeout, self.hyper.request(request));
 
         let result = match timeout.await {
@@ -87,7 +84,6 @@ impl Client {
                 return Err(HttpError::Timeout(body));
             }
         };
-        println!("Got response");
 
         let response = match result {
             Ok(response) => response,
