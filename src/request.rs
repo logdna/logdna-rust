@@ -1,28 +1,41 @@
+use std::convert::{Into, TryInto};
+use std::sync::Arc;
+
+use async_compression::futures::write::GzipEncoder;
+use async_compression::Level;
 use chrono::Utc;
-use flate2::Compression;
+use derivative::Derivative;
+use futures::io::AsyncWriteExt;
 use http::header::HeaderValue;
 use http::header::ACCEPT_CHARSET;
 use http::header::CONTENT_ENCODING;
 use http::header::CONTENT_TYPE;
+use http::header::USER_AGENT;
 use http::request::Builder as RequestBuilder;
 use http::Method;
-use hyper::{Body, Request};
+use hyper::Request;
 
-use std::convert::{Into, TryInto};
-
-use crate::body::IngestBody;
 use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
+use crate::segmented_buffer::AllocBytesMutFn;
+
+const SERIALIZATION_BUF_INITIAL_CAPACITY: usize = 1024 * 64;
+const SERIALIZATION_BUF_SEGMENT_SIZE: usize = 1024 * 16;
 
 /// A reusable template to generate requests from
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct RequestTemplate {
+    #[derivative(Debug = "ignore")]
+    pool: async_buf_pool::Pool<AllocBytesMutFn, bytes::BytesMut>,
     /// HTTP method, default is POST
     pub method: Method,
     /// Content charset, default is utf8
     pub charset: HeaderValue,
     /// Content type, default is application/json
     pub content: HeaderValue,
+    /// User agent header
+    pub user_agent: HeaderValue,
     /// Content encoding, default is gzip
     pub encoding: Encoding,
     /// Http schema, default is https
@@ -43,7 +56,10 @@ impl RequestTemplate {
         TemplateBuilder::new()
     }
     /// Uses the template to create a new request
-    pub fn new_request(&self, body: &IngestBody) -> Result<Request<Body>, RequestError> {
+    pub async fn new_request(
+        &self,
+        body: &crate::body::IngestBodyBuffer,
+    ) -> Result<Request<crate::body::IngestBodyBuffer>, RequestError> {
         let builder = RequestBuilder::new();
 
         let params =
@@ -54,21 +70,44 @@ impl RequestTemplate {
             .method(self.method.clone())
             .header(ACCEPT_CHARSET, self.charset.clone())
             .header(CONTENT_TYPE, self.content.clone())
+            .header(USER_AGENT, self.user_agent.clone())
             .header("apiKey", self.api_key.clone())
             .uri(self.schema.to_string() + &self.host + &self.endpoint + "?" + &params);
 
         self.encoding.set_builder_encoding(&mut builder);
-        let body = body.as_http_body(&self.encoding)?;
 
-        Ok(builder.body(body)?)
+        match &self.encoding {
+            Encoding::GzipJson(level) => {
+                let buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+                    .segment_size(SERIALIZATION_BUF_SEGMENT_SIZE)
+                    .initial_capacity(SERIALIZATION_BUF_SEGMENT_SIZE)
+                    .with_pool(self.pool.clone());
+
+                let mut encoder = GzipEncoder::with_quality(buf, *level);
+
+                let _written = futures::io::copy_buf(body.buf.reader(), &mut encoder)
+                    .await
+                    .map_err(RequestError::BuildIo)?;
+                encoder.close().await?;
+
+                let body = crate::body::IngestBodyBuffer::from_buffer(encoder.into_inner());
+
+                Ok(builder.body(body)?)
+            }
+            Encoding::Json => Ok(builder.body(body.clone())?),
+        }
     }
 }
+
+#[test]
+fn test_builder() {}
 
 /// Used to build an instance of a RequestTemplate
 pub struct TemplateBuilder {
     method: Method,
     charset: HeaderValue,
     content: HeaderValue,
+    user_agent: HeaderValue,
     encoding: Encoding,
     schema: Schema,
     host: String,
@@ -82,7 +121,7 @@ pub struct TemplateBuilder {
 #[derive(Debug, Clone)]
 pub enum Encoding {
     Json,
-    GzipJson(Compression),
+    GzipJson(Level),
 }
 
 impl TemplateBuilder {
@@ -92,7 +131,12 @@ impl TemplateBuilder {
             method: Method::POST,
             charset: HeaderValue::from_str("utf8").expect("charset::from_str()"),
             content: HeaderValue::from_str("application/json").expect("content::from_str()"),
-            encoding: Encoding::GzipJson(Compression::new(2)),
+            user_agent: HeaderValue::from_static(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            )),
+            encoding: Encoding::GzipJson(Level::Precise(2)),
             schema: Schema::Https,
             host: "logs.logdna.com".into(),
             endpoint: "/logs/ingest".into(),
@@ -109,7 +153,7 @@ impl TemplateBuilder {
     /// Set the charset field
     pub fn charset<T>(&mut self, charset: T) -> &mut Self
     where
-        T: TryInto<HeaderValue, Error = http::Error>,
+        T: TryInto<HeaderValue, Error = http::header::InvalidHeaderValue>,
     {
         self.charset = match charset.try_into() {
             Ok(v) => v,
@@ -123,9 +167,23 @@ impl TemplateBuilder {
     /// Set the content field
     pub fn content<T>(&mut self, content: T) -> &mut Self
     where
-        T: TryInto<HeaderValue, Error = http::Error>,
+        T: TryInto<HeaderValue, Error = http::header::InvalidHeaderValue>,
     {
         self.content = match content.try_into() {
+            Ok(v) => v,
+            Err(e) => {
+                self.err = Some(TemplateError::InvalidHeader(e));
+                return self;
+            }
+        };
+        self
+    }
+    /// Set the user-agent field
+    pub fn user_agent<T>(&mut self, user_agent: T) -> &mut Self
+    where
+        T: TryInto<HeaderValue, Error = http::header::InvalidHeaderValue>,
+    {
+        self.user_agent = match user_agent.try_into() {
             Ok(v) => v,
             Err(e) => {
                 self.err = Some(TemplateError::InvalidHeader(e));
@@ -139,6 +197,7 @@ impl TemplateBuilder {
         self.encoding = encoding.into();
         self
     }
+
     /// Set the schema field
     pub fn schema<T: Into<Schema>>(&mut self, schema: T) -> &mut Self {
         self.schema = schema.into();
@@ -167,9 +226,14 @@ impl TemplateBuilder {
     /// Build a RequestTemplate using the current builder
     pub fn build(&mut self) -> Result<RequestTemplate, TemplateError> {
         Ok(RequestTemplate {
+            pool: async_buf_pool::Pool::<AllocBytesMutFn, bytes::BytesMut>::new(
+                SERIALIZATION_BUF_INITIAL_CAPACITY,
+                Arc::new(|| bytes::BytesMut::with_capacity(SERIALIZATION_BUF_SEGMENT_SIZE)),
+            ),
             method: self.method.clone(),
             charset: self.charset.clone(),
             content: self.content.clone(),
+            user_agent: self.user_agent.clone(),
             encoding: self.encoding.clone(),
             schema: self.schema.clone(),
             host: self.host.clone(),
@@ -221,6 +285,45 @@ impl std::fmt::Display for Schema {
         match self {
             Http => write!(f, "http://"),
             Https => write!(f, "https://"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::body::test::line_st;
+    use crate::body::{IngestBody, IngestBodyBuffer, IntoIngestBodyBuffer};
+    use proptest::prelude::*;
+
+    use flate2::read::GzDecoder;
+
+    proptest! {
+        #[test]
+        fn request_template_body_round_trip(lines in proptest::collection::vec(line_st(), 5)) {
+            use bytes::buf::BufExt;
+            use std::io::Read;
+            let params = Params::builder()
+                .hostname("rust-client-test")
+                .build()
+                .expect("Params::builder()");
+
+            let mut request_template_builder = RequestTemplate::builder();
+            let request_template = request_template_builder.params(params).api_key("12345").build().unwrap();
+
+            let ingest_body = IngestBody::new(lines);
+            let serde_serialized = serde_json::to_string(&ingest_body).unwrap();
+
+            let body: IngestBodyBuffer = tokio_test::block_on(IntoIngestBodyBuffer::into(&ingest_body)).unwrap();
+
+            let mut request = tokio_test::block_on(request_template.new_request(&body)).unwrap();
+            let req_body_bytes= tokio_test::block_on( hyper::body::to_bytes(request.body_mut())).unwrap();
+
+            let mut d = GzDecoder::new(req_body_bytes.reader());
+
+            let mut s = String::new();
+            d.read_to_string(&mut s).unwrap();
+            assert_eq!(s, serde_serialized);
         }
     }
 }

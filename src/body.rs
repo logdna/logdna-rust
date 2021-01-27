@@ -1,16 +1,104 @@
 use std::collections::{BTreeMap, HashMap};
+use std::io::Read;
 use std::iter::FromIterator;
 use std::ops::{Deref, DerefMut};
+use std::pin::Pin;
+use std::task::{self, Poll};
 
+use async_trait::async_trait;
 use chrono::Utc;
-use flate2::write::GzEncoder;
-use hyper::Body;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::error::BodyError;
+use futures::ready;
+use futures::stream::Stream;
+use pin_project::pin_project;
+
 use crate::error::LineError;
-use crate::request::Encoding;
+use crate::serialize::{
+    IngestLineSerialize, IngestLineSerializeError, SerializeI64, SerializeMap, SerializeStr,
+    SerializeUtf8, SerializeValue,
+};
+
+#[pin_project]
+#[derive(Clone)]
+pub struct IngestBodyBuffer {
+    pub(crate) buf: crate::segmented_buffer::SegmentedBufBytes,
+    #[pin]
+    stream: Option<crate::segmented_buffer::SegmentedBufStream>,
+}
+
+impl core::fmt::Debug for IngestBodyBuffer {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let buf = self
+            .buf
+            .reader()
+            .bytes()
+            .collect::<Result<Vec<u8>, _>>()
+            .unwrap();
+        if let Ok(b) = std::str::from_utf8(&buf) {
+            write!(f, "IngestBodyBuffer: {}", b)
+        } else {
+            write!(f, "IngestBodyBuffer: {:?}", buf)
+        }
+    }
+}
+
+impl PartialEq for IngestBodyBuffer {
+    fn eq(&self, other: &Self) -> bool {
+        for (a, b) in self.buf.reader().bytes().zip(other.buf.reader().bytes()) {
+            match (a, b) {
+                (Ok(a), Ok(b)) => {
+                    if a != b {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+        true
+    }
+}
+
+impl IngestBodyBuffer {
+    pub fn from_buffer(ingest_buffer: crate::serialize::IngestBuffer) -> Self {
+        Self {
+            buf: ingest_buffer.into_bytes_stream(),
+            stream: None,
+        }
+    }
+
+    pub fn reader(&self) -> impl std::io::Read + '_ {
+        self.buf.reader()
+    }
+}
+
+// TODO add test
+impl hyper::body::HttpBody for IngestBodyBuffer {
+    type Data = bytes::Bytes;
+    type Error = Box<crate::error::IngestBufError>; //crate::Error;
+
+    fn poll_data(
+        self: Pin<&mut Self>,
+        cx: &mut task::Context<'_>,
+    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        let mut this = self.project();
+
+        if this.stream.is_none() {
+            this.stream.set(Some(this.buf.stream()))
+        }
+        // Infallible
+        let st = this.stream.as_pin_mut().unwrap();
+        Poll::Ready(ready!(st.poll_next(cx)).map(Ok))
+    }
+
+    fn poll_trailers(
+        self: Pin<&mut Self>,
+        _cx: &mut task::Context<'_>,
+    ) -> Poll<Result<Option<hyper::HeaderMap>, Self::Error>> {
+        Poll::Ready(Ok(None))
+    }
+}
 
 /// Type used to construct a body for an IngestRequest
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -23,20 +111,42 @@ impl IngestBody {
     pub fn new(lines: Vec<Line>) -> Self {
         Self { lines }
     }
+}
 
-    /// Serializes (and compresses, depending on Encoding type) itself to prepare for http transport
-    pub fn as_http_body(&self, encoding: &Encoding) -> Result<Body, BodyError> {
-        match encoding {
-            Encoding::GzipJson(level) => {
-                let mut encoder = GzEncoder::new(Vec::new(), *level);
-                serde_json::to_writer(&mut encoder, self)?;
-                Ok(Body::from(encoder.finish()?))
-            }
-            Encoding::Json => {
-                let bytes = serde_json::to_vec(self)?;
-                Ok(Body::from(bytes))
-            }
-        }
+#[async_trait]
+pub trait IntoIngestBodyBuffer {
+    type Error: std::error::Error;
+
+    async fn into(self) -> Result<IngestBodyBuffer, Self::Error>;
+}
+
+#[async_trait]
+impl IntoIngestBodyBuffer for IngestBody {
+    type Error = serde_json::error::Error;
+
+    async fn into(self) -> Result<IngestBodyBuffer, Self::Error> {
+        let mut buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+            .segment_size(2048)
+            .initial_capacity(8192)
+            .build();
+
+        serde_json::to_writer(&mut buf, &self)?;
+        Ok(IngestBodyBuffer::from_buffer(buf))
+    }
+}
+
+#[async_trait]
+impl<'a> IntoIngestBodyBuffer for &'a IngestBody {
+    type Error = serde_json::error::Error;
+
+    async fn into(self) -> Result<IngestBodyBuffer, Self::Error> {
+        let mut buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+            .segment_size(2048)
+            .initial_capacity(8192)
+            .build();
+
+        serde_json::to_writer(&mut buf, &self)?;
+        Ok(IngestBodyBuffer::from_buffer(buf))
     }
 }
 
@@ -56,6 +166,9 @@ pub struct Line {
     /// The file field, e.g /var/log/syslog
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// The host field, e.g node-us-0001
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
     /// The labels field, which is a key value map
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "label")]
@@ -70,6 +183,138 @@ pub struct Line {
     pub line: String,
     /// The timestamp of when the log line is constructed e.g, 342t783264
     pub timestamp: i64,
+}
+
+#[async_trait]
+impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for &'a Line {
+    type Ok = ();
+
+    fn has_annotations(&self) -> bool {
+        self.annotations.is_some()
+    }
+    async fn annotations<S>(&mut self, ser: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeMap<HashMap<String, String>> + std::marker::Send,
+    {
+        if let Some(ref annotations) = self.annotations {
+            ser.serialize_map(&annotations.0)?;
+        }
+        Ok(())
+    }
+    fn has_app(&self) -> bool {
+        self.app.is_some()
+    }
+    async fn app<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeStr<String> + std::marker::Send,
+    {
+        if let Some(app) = self.app.as_ref() {
+            writer.serialize_str(app)?;
+        };
+        Ok(())
+    }
+    fn has_env(&self) -> bool {
+        self.env.is_some()
+    }
+    async fn env<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeStr<String> + std::marker::Send,
+    {
+        if let Some(env) = self.env.as_ref() {
+            writer.serialize_str(env)?;
+        };
+        Ok(())
+    }
+    fn has_file(&self) -> bool {
+        self.file.is_some()
+    }
+    async fn file<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeStr<String> + std::marker::Send,
+    {
+        if let Some(file) = self.file.as_ref() {
+            writer.serialize_str(file)?;
+        };
+        Ok(())
+    }
+    fn has_host(&self) -> bool {
+        self.host.is_some()
+    }
+    async fn host<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeStr<String> + std::marker::Send,
+    {
+        if let Some(host) = self.host.as_ref() {
+            writer.serialize_str(host)?;
+        };
+        Ok(())
+    }
+    fn has_labels(&self) -> bool {
+        self.labels.is_some()
+    }
+    async fn labels<S>(&mut self, ser: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeMap<HashMap<String, String>> + std::marker::Send,
+    {
+        if let Some(ref labels) = self.labels {
+            ser.serialize_map(&labels.0)?;
+        }
+        Ok(())
+    }
+    fn has_level(&self) -> bool {
+        self.level.is_some()
+    }
+    async fn level<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeStr<String> + std::marker::Send,
+    {
+        if let Some(level) = self.level.as_ref() {
+            writer.serialize_str(level)?;
+        };
+        Ok(())
+    }
+    fn has_meta(&self) -> bool {
+        self.meta.is_some()
+    }
+    async fn meta<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeValue + std::marker::Send,
+    {
+        if let Some(meta) = self.meta.as_ref() {
+            writer.serialize(meta)?;
+        };
+        Ok(())
+    }
+    async fn line<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeUtf8<bytes::Bytes> + std::marker::Send,
+    {
+        let bytes = bytes::Bytes::copy_from_slice(self.line.as_bytes());
+        writer.serialize_utf8(bytes)?;
+
+        Ok(())
+    }
+    async fn timestamp<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        S: SerializeI64 + std::marker::Send,
+    {
+        writer.serialize_i64(&self.timestamp)?;
+
+        Ok(())
+    }
+    fn field_count(&self) -> usize {
+        2 + if Option::is_none(&self.annotations) {
+            0
+        } else {
+            1
+        } + if Option::is_none(&self.app) { 0 } else { 1 }
+            + if Option::is_none(&self.env) { 0 } else { 1 }
+            + if Option::is_none(&self.file) { 0 } else { 1 }
+            + if Option::is_none(&self.host) { 0 } else { 1 }
+            + if Option::is_none(&self.labels) { 0 } else { 1 }
+            + if Option::is_none(&self.level) { 0 } else { 1 }
+            + if Option::is_none(&self.meta) { 0 } else { 1 }
+    }
 }
 
 impl Line {
@@ -98,6 +343,7 @@ pub struct LineBuilder {
     pub app: Option<String>,
     pub env: Option<String>,
     pub file: Option<String>,
+    pub host: Option<String>,
     pub labels: Option<KeyValueMap>,
     pub level: Option<String>,
     pub line: Option<String>,
@@ -112,6 +358,7 @@ impl LineBuilder {
             app: None,
             env: None,
             file: None,
+            host: None,
             labels: None,
             level: None,
             line: None,
@@ -136,6 +383,11 @@ impl LineBuilder {
     /// Set the file field in the builder
     pub fn file<T: Into<String>>(mut self, file: T) -> Self {
         self.file = Some(file.into());
+        self
+    }
+    /// Set the host field in the builder
+    pub fn host<T: Into<String>>(mut self, host: T) -> Self {
+        self.host = Some(host.into());
         self
     }
     /// Set the level field in the builder
@@ -167,6 +419,7 @@ impl LineBuilder {
             app: self.app,
             env: self.env,
             file: self.file,
+            host: self.host,
             labels: self.labels,
             level: self.level,
             meta: self.meta,
@@ -233,6 +486,146 @@ impl From<BTreeMap<String, String>> for KeyValueMap {
     fn from(map: BTreeMap<String, String>) -> Self {
         Self {
             0: HashMap::from_iter(map),
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test {
+    use super::*;
+
+    use proptest::collection::hash_map;
+    use proptest::option::of;
+    use proptest::prelude::*;
+    use proptest::string::string_regex;
+
+    pub fn key_value_map_st(max_entries: usize) -> impl Strategy<Value = KeyValueMap> {
+        hash_map(
+            string_regex(".{1,64}").unwrap(),
+            string_regex(".{1,64}").unwrap(),
+            0..max_entries,
+        )
+        .prop_map(|h| KeyValueMap(h))
+    }
+
+    //recursive JSON type
+    pub fn json_st(depth: u32) -> impl Strategy<Value = serde_json::Value> {
+        let leaf = prop_oneof![
+            Just(serde_json::Value::Null),
+            any::<bool>().prop_map(|o| serde_json::to_value(o).unwrap()),
+            any::<f64>().prop_map(|o| serde_json::to_value(o).unwrap()),
+            ".{1,64}".prop_map(|o| serde_json::to_value(o).unwrap()),
+        ];
+        leaf.prop_recursive(depth, 256, 10, |inner| {
+            prop_oneof![
+                prop::collection::vec(inner.clone(), 0..10)
+                    .prop_map(|o| serde_json::to_value(o).unwrap()),
+                prop::collection::hash_map(".*", inner, 0..10)
+                    .prop_map(|o| serde_json::to_value(o).unwrap()),
+            ]
+        })
+    }
+    pub fn line_st() -> impl Strategy<Value = Line> {
+        (
+            of(key_value_map_st(5)),
+            of(string_regex(".{1,64}").unwrap()),
+            of(string_regex(".{1,64}").unwrap()),
+            of(string_regex(".{1,64}").unwrap()),
+            of(string_regex(".{1,64}").unwrap()),
+            of(key_value_map_st(5)),
+            of(string_regex(".{1,64}").unwrap()),
+            of(json_st(3)),
+            string_regex(".{1,64}").unwrap(),
+            (0..i64::MAX),
+        )
+            .prop_map(
+                |(annotations, app, env, file, host, labels, level, meta, line, timestamp)| Line {
+                    annotations,
+                    app,
+                    env,
+                    file,
+                    host,
+                    labels,
+                    level,
+                    meta,
+                    line,
+                    timestamp,
+                },
+            )
+    }
+    proptest! {
+        #[test]
+        fn serialize_line(line in line_st()) {
+            use crate::serialize::IngestLineSerializer;
+            use bytes::buf::BufExt;
+            use std::io::Read;
+
+            let buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new().segment_size(2048).build();
+            let se = IngestLineSerializer {
+                buf: serde_json::Serializer::new(buf),
+            };
+
+            let serde_serialized = serde_json::to_string(&line).unwrap();
+
+            let serialized = tokio_test::block_on(se.write_line(&line)).unwrap();
+            let mut buf = String::new();
+            serialized.reader().read_to_string(&mut buf).unwrap();
+            assert_eq!(
+                serde_serialized,
+                buf
+            );
+
+        // Create Ingestbuffer
+    }
+
+    }
+
+    proptest! {
+        #[test]
+        fn serialize_lines(lines in proptest::collection::vec(line_st(), 5)) {
+            use crate::serialize::IngestBodySerializer;
+            use bytes::buf::BufExt;
+            use std::io::Read;
+
+            let buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+                .segment_size(2048)
+                .initial_capacity(8192)
+                .build();
+
+            let ingest_body = IngestBody{lines};
+            let serde_serialized = serde_json::to_string(&ingest_body).unwrap();
+
+            let mut se = IngestBodySerializer::from_buffer(buf).unwrap();
+            for line in ingest_body.lines.iter() {
+                tokio_test::block_on(se.write_line(line)).unwrap();
+            }
+            let serialized = se.end().unwrap();
+            let mut buf = String::new();
+            serialized.reader().read_to_string(&mut buf).unwrap();
+
+            assert_eq!(
+                serde_serialized,
+                buf
+            );
+
+            // Fails because float parsing is dodgy
+            //assert_eq!(serde_json::from_str::<IngestBody>(&buf).unwrap(), ingest_body);
+        }
+    }
+    proptest! {
+
+        #[test]
+        fn ingest_body_buffer_http_body(lines in proptest::collection::vec(line_st(), 5)) {
+            use std::io::Read;
+
+            let ingest_body = IngestBody{lines};
+            let serde_serialized = serde_json::to_string(&ingest_body).unwrap();
+
+            let ingest_body_buffer: IngestBodyBuffer = tokio_test::block_on(IntoIngestBodyBuffer::into(&ingest_body)).unwrap();
+
+            let mut buf = String::new();
+            ingest_body_buffer.reader().read_to_string(&mut buf).unwrap();
+            assert_eq!(serde_serialized.len(), buf.len());
         }
     }
 }

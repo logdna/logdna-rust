@@ -6,14 +6,14 @@ pub use hyper::{body, client::Builder as HyperBuilder, Client as HyperClient};
 use hyper_rustls::HttpsConnector;
 use tokio::time::timeout;
 
-use crate::body::IngestBody;
+use crate::body::IngestBodyBuffer;
 use crate::error::HttpError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
-    hyper: HyperClient<HttpsConnector<HttpConnector<GaiResolver>>>,
+    hyper: HyperClient<HttpsConnector<HttpConnector<GaiResolver>>, IngestBodyBuffer>,
     template: RequestTemplate,
     timeout: Duration,
 }
@@ -49,7 +49,9 @@ impl Client {
             connector
         };
 
-        let tls = rustls::ClientConfig::new();
+        let mut tls = rustls::ClientConfig::new();
+        tls.root_store =
+            rustls_native_certs::load_native_certs().expect("could not load platform certs");
         let https_connector = hyper_rustls::HttpsConnector::from((http_connector, tls));
 
         Client {
@@ -67,8 +69,13 @@ impl Client {
     /// Send an IngestBody to the LogDNA Ingest API
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
-    pub async fn send<T: AsRef<IngestBody>>(&self, body: T) -> IngestResponse<T> {
-        let request = self.template.new_request(body.as_ref())?;
+    pub async fn send<T>(&self, body: T) -> IngestResponse
+    where
+        T: crate::body::IntoIngestBodyBuffer + Send + Sync,
+        T::Error: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static,
+    {
+        let body = body.into().await.map_err(move |e| HttpError::Other(Box::new(e)))?;
+        let request = self.template.new_request(&body).await?;
         let timeout = timeout(self.timeout, self.hyper.request(request));
 
         let result = match timeout.await {
@@ -87,10 +94,10 @@ impl Client {
 
         let status_code = response.status();
         let status = status_code.as_u16();
-        if status < 200 || status >= 300 {
+        if !(200..300).contains(&status) {
             let body_bytes = body::to_bytes(response.into_body()).await?;
             Ok(Response::Failed(
-                body,
+                Box::new(body),
                 status_code,
                 std::str::from_utf8(&body_bytes)?.to_string(),
             ))
