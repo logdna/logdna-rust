@@ -78,6 +78,16 @@ impl Client {
             .into()
             .await
             .map_err(move |e| HttpError::Other(Box::new(e)))?;
+        let counts = countme::get::<
+            crate::segmented_buffer::SegmentedBuf<async_buf_pool::Reusable<bytes::BytesMut>>,
+        >();
+        log::debug!(
+            "live: {}, max_live: {}, total: {}",
+            counts.live,
+            counts.max_live,
+            counts.total
+        );
+
         let request = self.template.new_request(&body).await?;
         let timeout = timeout(self.timeout, self.hyper.request(request));
 
@@ -94,6 +104,9 @@ impl Client {
                 return Err(HttpError::Send(body, e));
             }
         };
+
+        let counts = countme::get::<crate::segmented_buffer::SegmentedBuf<async_buf_pool::Reusable<bytes::BytesMut>>>();
+        log::debug!("live: {}, max_live: {}, total: {}", counts.live, counts.max_live, counts.total);
 
         let status_code = response.status();
         let status = status_code.as_u16();

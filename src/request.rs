@@ -17,7 +17,7 @@ use hyper::Request;
 
 use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
-use crate::segmented_buffer::AllocBytesMutFn;
+use crate::segmented_buffer::{AllocBufferFn, Buffer};
 
 const SERIALIZATION_BUF_INITIAL_CAPACITY: usize = 1024 * 64;
 const SERIALIZATION_BUF_SEGMENT_SIZE: usize = 1024 * 16;
@@ -27,7 +27,7 @@ const SERIALIZATION_BUF_SEGMENT_SIZE: usize = 1024 * 16;
 #[derivative(Debug)]
 pub struct RequestTemplate {
     #[derivative(Debug = "ignore")]
-    pool: async_buf_pool::Pool<AllocBytesMutFn, bytes::BytesMut>,
+    pool: async_buf_pool::Pool<AllocBufferFn, Buffer>,
     /// HTTP method, default is POST
     pub method: Method,
     /// Content charset, default is utf8
@@ -226,9 +226,13 @@ impl TemplateBuilder {
     /// Build a RequestTemplate using the current builder
     pub fn build(&mut self) -> Result<RequestTemplate, TemplateError> {
         Ok(RequestTemplate {
-            pool: async_buf_pool::Pool::<AllocBytesMutFn, bytes::BytesMut>::new(
+            pool: async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
                 SERIALIZATION_BUF_INITIAL_CAPACITY,
-                Arc::new(|| bytes::BytesMut::with_capacity(SERIALIZATION_BUF_SEGMENT_SIZE)),
+                Arc::new(|| {
+                    Buffer::new(bytes::BytesMut::with_capacity(
+                        SERIALIZATION_BUF_SEGMENT_SIZE,
+                    ))
+                }),
             ),
             method: self.method.clone(),
             charset: self.charset.clone(),

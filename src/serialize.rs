@@ -9,12 +9,12 @@ use serde::{Serialize, Serializer};
 use serde_json::ser::{CharEscape, Formatter};
 use thiserror::Error;
 
-use crate::segmented_buffer::AllocBytesMutFn;
+use crate::segmented_buffer::{AllocBufferFn, Buffer};
 
 pub type IngestBuffer = crate::segmented_buffer::SegmentedPoolBuf<
-    Pin<Box<dyn Future<Output = Option<async_buf_pool::Reusable<BytesMut>>> + std::marker::Send>>,
-    BytesMut,
-    AllocBytesMutFn,
+    Pin<Box<dyn Future<Output = Option<async_buf_pool::Reusable<Buffer>>> + std::marker::Send>>,
+    Buffer,
+    AllocBufferFn,
 >;
 
 #[derive(Debug, Error)]
@@ -529,9 +529,9 @@ pub fn line_serializer_source(
     let segment_size2 = segment_size;
     let initial_capacity2 = segment_size;
     futures::stream::unfold(
-        async_buf_pool::Pool::<AllocBytesMutFn, BytesMut>::new(
+        async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
             initial_capacity,
-            Arc::new(move || BytesMut::with_capacity(segment_size)),
+            Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
         ),
         move |pool| async move {
             Some((
@@ -556,9 +556,9 @@ pub fn body_serializer_source(
     let segment_size2 = segment_size;
     let initial_capacity2 = segment_size;
     futures::stream::unfold(
-        async_buf_pool::Pool::<AllocBytesMutFn, BytesMut>::new(
+        async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
             initial_capacity,
-            Arc::new(move || BytesMut::with_capacity(segment_size)),
+            Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
         ),
         move |pool| async move {
             Some((
