@@ -225,6 +225,9 @@ impl TemplateBuilder {
     }
     /// Build a RequestTemplate using the current builder
     pub fn build(&mut self) -> Result<RequestTemplate, TemplateError> {
+        if let Some(e) = self.err.take() {
+            return Err(e);
+        };
         Ok(RequestTemplate {
             pool: async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
                 SERIALIZATION_BUF_INITIAL_CAPACITY,

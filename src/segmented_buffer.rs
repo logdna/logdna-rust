@@ -747,7 +747,6 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use tokio_test;
 
     use futures::stream::StreamExt;
 
@@ -780,7 +779,7 @@ mod test {
             assert!(counts.live < 8192/2048);
 
             use std::io::Write;
-            buf.write(&inp.1).unwrap();
+            buf.write_all(&inp.1).unwrap();
 
             assert_eq!(buf.iter()
                        .zip(inp.1.iter())

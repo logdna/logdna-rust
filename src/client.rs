@@ -78,6 +78,7 @@ impl Client {
             .into()
             .await
             .map_err(move |e| HttpError::Other(Box::new(e)))?;
+
         let counts = countme::get::<
             crate::segmented_buffer::SegmentedBuf<async_buf_pool::Reusable<bytes::BytesMut>>,
         >();
@@ -105,8 +106,15 @@ impl Client {
             }
         };
 
-        let counts = countme::get::<crate::segmented_buffer::SegmentedBuf<async_buf_pool::Reusable<bytes::BytesMut>>>();
-        log::debug!("live: {}, max_live: {}, total: {}", counts.live, counts.max_live, counts.total);
+        let counts = countme::get::<
+            crate::segmented_buffer::SegmentedBuf<async_buf_pool::Reusable<bytes::BytesMut>>,
+        >();
+        log::debug!(
+            "live: {}, max_live: {}, total: {}",
+            counts.live,
+            counts.max_live,
+            counts.total
+        );
 
         let status_code = response.status();
         let status = status_code.as_u16();

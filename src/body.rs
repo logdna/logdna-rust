@@ -745,7 +745,7 @@ pub(crate) mod test {
             string_regex(".{1,64}").unwrap(),
             0..max_entries,
         )
-        .prop_map(|h| KeyValueMap(h))
+        .prop_map(KeyValueMap)
     }
 
     //recursive JSON type

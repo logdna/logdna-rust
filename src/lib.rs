@@ -128,7 +128,7 @@ mod tests {
             .build()
             .expect("Params::builder()");
         let request_template = RequestTemplate::builder()
-            .host(env::var("LOGDNA_HOST").unwrap_or("logs.logdna.com".into()))
+            .host(env::var("LOGDNA_HOST").unwrap_or_else(|_| "logs.logdna.com".into()))
             .params(params)
             .api_key(env::var("API_KEY").expect("api key missing"))
             .build()
