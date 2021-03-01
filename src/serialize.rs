@@ -35,14 +35,15 @@ where
     type Ok;
 
     fn has_annotations(&self) -> bool;
-    async fn annotations<S>(
+    async fn annotations<'a, S>(
         &mut self,
         writer: &mut S,
     ) -> Result<Self::Ok, IngestLineSerializeError>
     where
-        S: SerializeMap<V> + std::marker::Send,
+        S: SerializeMap<'a, V> + std::marker::Send,
         T: 'async_trait,
-        U: 'async_trait;
+        U: 'async_trait,
+        V: 'a;
     fn has_app(&self) -> bool;
     async fn app<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
     where
@@ -68,9 +69,10 @@ where
         T: 'async_trait,
         U: 'async_trait;
     fn has_labels(&self) -> bool;
-    async fn labels<S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    async fn labels<'a, S>(&mut self, writer: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
     where
-        S: SerializeMap<V> + std::marker::Send,
+        S: SerializeMap<'a, V> + std::marker::Send,
+        V: 'a,
         T: 'async_trait,
         U: 'async_trait;
     fn has_level(&self) -> bool;
@@ -98,29 +100,43 @@ where
     fn field_count(&self) -> usize;
 }
 
+#[async_trait]
 pub trait SerializeUtf8<T: ?Sized> {
     type Ok;
-    fn serialize_utf8(&mut self, key: T) -> Result<Self::Ok, IngestLineSerializeError>;
+    async fn serialize_utf8(&mut self, key: T) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        T: 'async_trait;
 }
 
+#[async_trait]
 pub trait SerializeStr<T: ?Sized> {
     type Ok;
-    fn serialize_str(&mut self, key: &T) -> Result<Self::Ok, IngestLineSerializeError>;
+    async fn serialize_str(&mut self, key: &T) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        T: 'async_trait;
 }
 
+#[async_trait]
 pub trait SerializeI64 {
     type Ok;
-    fn serialize_i64(&mut self, key: &i64) -> Result<Self::Ok, IngestLineSerializeError>;
+    async fn serialize_i64(&mut self, key: &i64) -> Result<Self::Ok, IngestLineSerializeError>;
 }
 
+#[async_trait]
 pub trait SerializeValue {
     type Ok;
-    fn serialize(&mut self, key: &serde_json::Value) -> Result<Self::Ok, IngestLineSerializeError>;
+    async fn serialize(
+        &mut self,
+        key: &serde_json::Value,
+    ) -> Result<Self::Ok, IngestLineSerializeError>;
 }
 
-pub trait SerializeMap<T: ?Sized> {
+#[async_trait]
+pub trait SerializeMap<'a, T: ?Sized + 'a> {
     type Ok;
-    fn serialize_map(&mut self, key: &T) -> Result<Self::Ok, IngestLineSerializeError>;
+    async fn serialize_map(&mut self, key: &T) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        'a: 'async_trait;
 }
 
 pub struct IngestBytesSerializer {
@@ -133,13 +149,14 @@ impl IngestBytesSerializer {
     }
 }
 
+#[async_trait]
 impl<T> SerializeStr<T> for IngestBytesSerializer
 where
-    T: AsRef<str>,
+    T: AsRef<str> + Send + Sync,
 {
     type Ok = ();
 
-    fn serialize_str(&mut self, bytes: &T) -> Result<Self::Ok, IngestLineSerializeError> {
+    async fn serialize_str(&mut self, bytes: &T) -> Result<Self::Ok, IngestLineSerializeError> {
         // Infallible
         let mut ser = self.ser.take().unwrap();
         bytes.as_ref().serialize(&mut ser.buf)?;
@@ -148,15 +165,20 @@ where
     }
 }
 
-impl<I, K, V> SerializeMap<I> for IngestBytesSerializer
+#[async_trait]
+impl<'a, I, K, V> SerializeMap<'a, I> for IngestBytesSerializer
 where
-    for<'a> &'a I: IntoIterator<Item = (&'a K, &'a V)>,
-    K: Serialize,
-    V: Serialize,
+    for<'b> &'b I: IntoIterator<Item = (&'b K, &'b V)>,
+    I: Send + Sync + 'a,
+    K: Serialize + 'a,
+    V: Serialize + 'a,
 {
     type Ok = ();
 
-    fn serialize_map(&mut self, bytes: &I) -> Result<Self::Ok, IngestLineSerializeError> {
+    async fn serialize_map(&mut self, bytes: &I) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        'a: 'async_trait,
+    {
         // Infallible
         use serde::ser::SerializeMap;
         let mut _ser = self.ser.take().unwrap();
@@ -170,10 +192,11 @@ where
     }
 }
 
+#[async_trait]
 impl SerializeI64 for IngestBytesSerializer {
     type Ok = ();
 
-    fn serialize_i64(&mut self, i: &i64) -> Result<Self::Ok, IngestLineSerializeError> {
+    async fn serialize_i64(&mut self, i: &i64) -> Result<Self::Ok, IngestLineSerializeError> {
         // Infallible
         let mut ser = self.ser.take().unwrap();
         i.serialize(&mut ser.buf)?;
@@ -182,10 +205,14 @@ impl SerializeI64 for IngestBytesSerializer {
     }
 }
 
+#[async_trait]
 impl SerializeValue for IngestBytesSerializer {
     type Ok = ();
 
-    fn serialize(&mut self, i: &serde_json::Value) -> Result<Self::Ok, IngestLineSerializeError> {
+    async fn serialize(
+        &mut self,
+        i: &serde_json::Value,
+    ) -> Result<Self::Ok, IngestLineSerializeError> {
         // Infallible
         let mut ser = self.ser.take().unwrap();
         i.serialize(&mut ser.buf)?;
@@ -194,13 +221,17 @@ impl SerializeValue for IngestBytesSerializer {
     }
 }
 
+#[async_trait]
 impl<T> SerializeUtf8<T> for IngestBytesSerializer
 where
-    T: bytes::buf::Buf,
+    T: bytes::buf::Buf + Send,
 {
     type Ok = ();
 
-    fn serialize_utf8(&mut self, mut bytes: T) -> Result<Self::Ok, IngestLineSerializeError> {
+    async fn serialize_utf8(&mut self, mut bytes: T) -> Result<Self::Ok, IngestLineSerializeError>
+    where
+        T: 'async_trait,
+    {
         //let mut bytes = bytes.buf;
         let mut fmt = serde_json::ser::CompactFormatter {};
         let mut wtr = self.ser.take().unwrap().buf.into_inner();
@@ -370,8 +401,9 @@ impl IngestLineSerializer {
         mut from: impl IngestLineSerialize<T, U, I>,
     ) -> Result<IngestBuffer, IngestLineSerializeError>
     where
-        T: AsRef<str> + std::marker::Send,
+        T: AsRef<str> + std::marker::Send + Sync,
         U: bytes::buf::Buf + std::marker::Send,
+        I: Send + Sync,
         for<'a> &'a I: IntoIterator<Item = (&'a String, &'a String)> + std::marker::Send,
     {
         let mut fmt = serde_json::ser::CompactFormatter {};
@@ -449,9 +481,10 @@ impl IngestBodySerializer {
         from: impl IngestLineSerialize<T, U, I>,
     ) -> Result<(), IngestLineSerializeError>
     where
-        T: AsRef<str> + std::marker::Send,
+        T: AsRef<str> + std::marker::Send + Sync,
         U: bytes::buf::Buf + std::marker::Send,
         for<'a> &'a I: IntoIterator<Item = (&'a String, &'a String)> + std::marker::Send,
+        I: Send + Sync,
     {
         let mut fmt = serde_json::ser::CompactFormatter {};
 
