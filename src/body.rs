@@ -192,12 +192,15 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
     fn has_annotations(&self) -> bool {
         self.annotations.is_some()
     }
-    async fn annotations<S>(&mut self, ser: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    async fn annotations<'b, S>(
+        &mut self,
+        ser: &mut S,
+    ) -> Result<Self::Ok, IngestLineSerializeError>
     where
-        S: SerializeMap<HashMap<String, String>> + std::marker::Send,
+        S: SerializeMap<'b, HashMap<String, String>> + std::marker::Send,
     {
         if let Some(ref annotations) = self.annotations {
-            ser.serialize_map(&annotations.0)?;
+            ser.serialize_map(&annotations.0).await?;
         }
         Ok(())
     }
@@ -209,7 +212,7 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
         S: SerializeStr<String> + std::marker::Send,
     {
         if let Some(app) = self.app.as_ref() {
-            writer.serialize_str(app)?;
+            writer.serialize_str(app).await?;
         };
         Ok(())
     }
@@ -221,7 +224,7 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
         S: SerializeStr<String> + std::marker::Send,
     {
         if let Some(env) = self.env.as_ref() {
-            writer.serialize_str(env)?;
+            writer.serialize_str(env).await?;
         };
         Ok(())
     }
@@ -233,7 +236,7 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
         S: SerializeStr<String> + std::marker::Send,
     {
         if let Some(file) = self.file.as_ref() {
-            writer.serialize_str(file)?;
+            writer.serialize_str(file).await?;
         };
         Ok(())
     }
@@ -245,19 +248,19 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
         S: SerializeStr<String> + std::marker::Send,
     {
         if let Some(host) = self.host.as_ref() {
-            writer.serialize_str(host)?;
+            writer.serialize_str(host).await?;
         };
         Ok(())
     }
     fn has_labels(&self) -> bool {
         self.labels.is_some()
     }
-    async fn labels<S>(&mut self, ser: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
+    async fn labels<'b, S>(&mut self, ser: &mut S) -> Result<Self::Ok, IngestLineSerializeError>
     where
-        S: SerializeMap<HashMap<String, String>> + std::marker::Send,
+        S: SerializeMap<'b, HashMap<String, String>> + std::marker::Send,
     {
         if let Some(ref labels) = self.labels {
-            ser.serialize_map(&labels.0)?;
+            ser.serialize_map(&labels.0).await?;
         }
         Ok(())
     }
@@ -269,7 +272,7 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
         S: SerializeStr<String> + std::marker::Send,
     {
         if let Some(level) = self.level.as_ref() {
-            writer.serialize_str(level)?;
+            writer.serialize_str(level).await?;
         };
         Ok(())
     }
@@ -281,7 +284,7 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
         S: SerializeValue + std::marker::Send,
     {
         if let Some(meta) = self.meta.as_ref() {
-            writer.serialize(meta)?;
+            writer.serialize(meta).await?;
         };
         Ok(())
     }
@@ -290,7 +293,7 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
         S: SerializeUtf8<bytes::Bytes> + std::marker::Send,
     {
         let bytes = bytes::Bytes::copy_from_slice(self.line.as_bytes());
-        writer.serialize_utf8(bytes)?;
+        writer.serialize_utf8(bytes).await?;
 
         Ok(())
     }
@@ -298,7 +301,7 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
     where
         S: SerializeI64 + std::marker::Send,
     {
-        writer.serialize_i64(&self.timestamp)?;
+        writer.serialize_i64(&self.timestamp).await?;
 
         Ok(())
     }
