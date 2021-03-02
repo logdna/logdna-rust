@@ -14,7 +14,7 @@ use futures::ready;
 use futures::stream::Stream;
 use pin_project::pin_project;
 
-use crate::error::LineError;
+use crate::error::{LineError, LineMetaError};
 use crate::serialize::{
     IngestLineSerialize, IngestLineSerializeError, SerializeI64, SerializeMap, SerializeStr,
     SerializeUtf8, SerializeValue,
@@ -148,6 +148,17 @@ impl<'a> IntoIngestBodyBuffer for &'a IngestBody {
         serde_json::to_writer(&mut buf, &self)?;
         Ok(IngestBodyBuffer::from_buffer(buf))
     }
+}
+
+pub trait LineMetaMut {
+    fn set_annotations(&mut self, annotations: KeyValueMap) -> Result<(), LineMetaError>;
+    fn set_app(&mut self, app: String) -> Result<(), LineMetaError>;
+    fn set_env(&mut self, env: String) -> Result<(), LineMetaError>;
+    fn set_file(&mut self, file: String) -> Result<(), LineMetaError>;
+    fn set_host(&mut self, host: String) -> Result<(), LineMetaError>;
+    fn set_labels(&mut self, labels: KeyValueMap) -> Result<(), LineMetaError>;
+    fn set_level(&mut self, level: String) -> Result<(), LineMetaError>;
+    fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError>;
 }
 
 /// Defines a log line, marking none required fields as Option
@@ -433,6 +444,42 @@ impl LineBuilder {
         })
     }
 }
+
+impl LineMetaMut for LineBuilder {
+    fn set_annotations(&mut self, annotations: KeyValueMap) -> Result<(), LineMetaError> {
+        self.annotations = Some(annotations);
+        Ok(())
+    }
+    fn set_app(&mut self, app: String) -> Result<(), LineMetaError> {
+        self.app = Some(app);
+        Ok(())
+    }
+    fn set_env(&mut self, env: String) -> Result<(), LineMetaError> {
+        self.env = Some(env);
+        Ok(())
+    }
+    fn set_file(&mut self, file: String) -> Result<(), LineMetaError> {
+        self.file = Some(file);
+        Ok(())
+    }
+    fn set_host(&mut self, host: String) -> Result<(), LineMetaError> {
+        self.host = Some(host);
+        Ok(())
+    }
+    fn set_labels(&mut self, labels: KeyValueMap) -> Result<(), LineMetaError> {
+        self.labels = Some(labels);
+        Ok(())
+    }
+    fn set_level(&mut self, level: String) -> Result<(), LineMetaError> {
+        self.level = Some(level);
+        Ok(())
+    }
+    fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError> {
+        self.meta = Some(meta);
+        Ok(())
+    }
+}
+
 impl Default for LineBuilder {
     fn default() -> Self {
         Self::new()
