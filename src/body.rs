@@ -150,7 +150,18 @@ impl<'a> IntoIngestBodyBuffer for &'a IngestBody {
     }
 }
 
-pub trait LineMetaMut {
+pub trait LineMeta {
+    fn get_annotations(&mut self) -> Option<&KeyValueMap>;
+    fn get_app(&self) -> Option<&str>;
+    fn get_env(&self) -> Option<&str>;
+    fn get_file(&self) -> Option<&str>;
+    fn get_host(&self) -> Option<&str>;
+    fn get_labels(&self) -> Option<&KeyValueMap>;
+    fn get_level(&self) ->  Option<&str>;
+    fn get_meta(&self) -> Option<&Value>;
+}
+
+pub trait LineMetaMut: LineMeta {
     fn set_annotations(&mut self, annotations: KeyValueMap) -> Result<(), LineMetaError>;
     fn set_app(&mut self, app: String) -> Result<(), LineMetaError>;
     fn set_env(&mut self, env: String) -> Result<(), LineMetaError>;
@@ -442,6 +453,34 @@ impl LineBuilder {
                 .ok_or_else(|| LineError::RequiredField("line field is required".into()))?,
             timestamp: Utc::now().timestamp(),
         })
+    }
+}
+
+
+impl LineMeta for LineBuilder {
+    fn get_annotations(&mut self) -> Option<&KeyValueMap>{
+        self.annotations.as_ref()
+    }
+    fn get_app(&self) -> Option<&str>{
+        self.app.as_deref()
+    }
+    fn get_env(&self) -> Option<&str>{
+        self.env.as_deref()
+    }
+    fn get_file(&self) -> Option<&str>{
+        self.file.as_deref()
+    }
+    fn get_host(&self) -> Option<&str>{
+        self.host.as_deref()
+    }
+    fn get_labels(&self) -> Option<&KeyValueMap>{
+        self.labels.as_ref()
+    }
+    fn get_level(&self) ->  Option<&str>{
+        self.level.as_deref()
+    }
+    fn get_meta(&self) -> Option<&Value>{
+        self.meta.as_ref()
     }
 }
 
