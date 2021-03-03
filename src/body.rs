@@ -160,7 +160,7 @@ impl<'a> IntoIngestBodyBuffer for &'a IngestBody {
 }
 
 pub trait LineMeta {
-    fn get_annotations(&mut self) -> Option<&KeyValueMap>;
+    fn get_annotations(&self) -> Option<&KeyValueMap>;
     fn get_app(&self) -> Option<&str>;
     fn get_env(&self) -> Option<&str>;
     fn get_file(&self) -> Option<&str>;
@@ -466,7 +466,61 @@ impl LineBuilder {
 }
 
 impl LineMeta for LineBuilder {
-    fn get_annotations(&mut self) -> Option<&KeyValueMap> {
+    fn get_annotations(&self) -> Option<&KeyValueMap> {
+        self.annotations.as_ref()
+    }
+    fn get_app(&self) -> Option<&str> {
+        self.app.as_deref()
+    }
+    fn get_env(&self) -> Option<&str> {
+        self.env.as_deref()
+    }
+    fn get_file(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+    fn get_host(&self) -> Option<&str> {
+        self.host.as_deref()
+    }
+    fn get_labels(&self) -> Option<&KeyValueMap> {
+        self.labels.as_ref()
+    }
+    fn get_level(&self) -> Option<&str> {
+        self.level.as_deref()
+    }
+    fn get_meta(&self) -> Option<&Value> {
+        self.meta.as_ref()
+    }
+}
+
+impl LineMeta for &LineBuilder {
+    fn get_annotations(&self) -> Option<&KeyValueMap> {
+        self.annotations.as_ref()
+    }
+    fn get_app(&self) -> Option<&str> {
+        self.app.as_deref()
+    }
+    fn get_env(&self) -> Option<&str> {
+        self.env.as_deref()
+    }
+    fn get_file(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+    fn get_host(&self) -> Option<&str> {
+        self.host.as_deref()
+    }
+    fn get_labels(&self) -> Option<&KeyValueMap> {
+        self.labels.as_ref()
+    }
+    fn get_level(&self) -> Option<&str> {
+        self.level.as_deref()
+    }
+    fn get_meta(&self) -> Option<&Value> {
+        self.meta.as_ref()
+    }
+}
+
+impl LineMeta for &mut LineBuilder {
+    fn get_annotations(&self) -> Option<&KeyValueMap> {
         self.annotations.as_ref()
     }
     fn get_app(&self) -> Option<&str> {
@@ -524,6 +578,95 @@ impl LineMetaMut for LineBuilder {
     fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError> {
         self.meta = Some(meta);
         Ok(())
+    }
+}
+
+impl LineMetaMut for &mut LineBuilder {
+    fn set_annotations(&mut self, annotations: KeyValueMap) -> Result<(), LineMetaError> {
+        self.annotations = Some(annotations);
+        Ok(())
+    }
+    fn set_app(&mut self, app: String) -> Result<(), LineMetaError> {
+        self.app = Some(app);
+        Ok(())
+    }
+    fn set_env(&mut self, env: String) -> Result<(), LineMetaError> {
+        self.env = Some(env);
+        Ok(())
+    }
+    fn set_file(&mut self, file: String) -> Result<(), LineMetaError> {
+        self.file = Some(file);
+        Ok(())
+    }
+    fn set_host(&mut self, host: String) -> Result<(), LineMetaError> {
+        self.host = Some(host);
+        Ok(())
+    }
+    fn set_labels(&mut self, labels: KeyValueMap) -> Result<(), LineMetaError> {
+        self.labels = Some(labels);
+        Ok(())
+    }
+    fn set_level(&mut self, level: String) -> Result<(), LineMetaError> {
+        self.level = Some(level);
+        Ok(())
+    }
+    fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError> {
+        self.meta = Some(meta);
+        Ok(())
+    }
+}
+
+impl LineMeta for Line {
+    fn get_annotations(&self) -> Option<&KeyValueMap> {
+        self.annotations.as_ref()
+    }
+    fn get_app(&self) -> Option<&str> {
+        self.app.as_deref()
+    }
+    fn get_env(&self) -> Option<&str> {
+        self.env.as_deref()
+    }
+    fn get_file(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+    fn get_host(&self) -> Option<&str> {
+        self.host.as_deref()
+    }
+    fn get_labels(&self) -> Option<&KeyValueMap> {
+        self.labels.as_ref()
+    }
+    fn get_level(&self) -> Option<&str> {
+        self.level.as_deref()
+    }
+    fn get_meta(&self) -> Option<&Value> {
+        self.meta.as_ref()
+    }
+}
+
+impl<'a> LineMeta for &'a Line {
+    fn get_annotations(&self) -> Option<&KeyValueMap> {
+        self.annotations.as_ref()
+    }
+    fn get_app(&self) -> Option<&str> {
+        self.app.as_deref()
+    }
+    fn get_env(&self) -> Option<&str> {
+        self.env.as_deref()
+    }
+    fn get_file(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+    fn get_host(&self) -> Option<&str> {
+        self.host.as_deref()
+    }
+    fn get_labels(&self) -> Option<&KeyValueMap> {
+        self.labels.as_ref()
+    }
+    fn get_level(&self) -> Option<&str> {
+        self.level.as_deref()
+    }
+    fn get_meta(&self) -> Option<&Value> {
+        self.meta.as_ref()
     }
 }
 
