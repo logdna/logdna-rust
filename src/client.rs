@@ -74,7 +74,10 @@ impl Client {
         T: crate::body::IntoIngestBodyBuffer + Send + Sync,
         T::Error: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static,
     {
-        let body = body.into().await.map_err(move |e| HttpError::Other(Box::new(e)))?;
+        let body = body
+            .into()
+            .await
+            .map_err(move |e| HttpError::Other(Box::new(e)))?;
         let request = self.template.new_request(&body).await?;
         let timeout = timeout(self.timeout, self.hyper.request(request));
 

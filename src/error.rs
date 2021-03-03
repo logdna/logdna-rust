@@ -23,6 +23,7 @@ quick_error! {
 
     }
 }
+
 pub enum HttpError<T>
 where
     T: Send + 'static,
@@ -149,4 +150,13 @@ quick_error! {
              from()
         }
      }
+}
+
+quick_error! {
+    #[derive(Debug)]
+    pub enum LineMetaError{
+        Failed(err: &'static str){
+            from()
+        }
+    }
 }
