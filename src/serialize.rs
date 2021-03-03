@@ -511,7 +511,7 @@ impl IngestBodySerializer {
     }
 }
 
-pub fn buffer_source(
+pub fn line_serializer_source(
     segment_size: usize,
     initial_capacity: usize,
 ) -> impl futures::stream::Stream<Item = IngestLineSerializer> {
@@ -532,6 +532,31 @@ pub fn buffer_source(
                             .with_pool(pool.clone()),
                     ),
                 },
+                pool,
+            ))
+        },
+    )
+}
+
+pub fn body_serializer_source(
+    segment_size: usize,
+    initial_capacity: usize,
+) -> impl futures::stream::Stream<Item = Result<IngestBodySerializer, IngestLineSerializeError>> {
+    let segment_size2 = segment_size;
+    let initial_capacity2 = segment_size;
+    futures::stream::unfold(
+        async_buf_pool::Pool::<AllocBytesMutFn, BytesMut>::new(
+            initial_capacity,
+            Arc::new(move || BytesMut::with_capacity(segment_size)),
+        ),
+        move |pool| async move {
+            Some((
+                IngestBodySerializer::from_buffer(
+                    crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+                        .segment_size(segment_size2)
+                        .initial_capacity(initial_capacity2)
+                        .with_pool(pool.clone()),
+                ),
                 pool,
             ))
         },
