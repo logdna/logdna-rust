@@ -516,6 +516,10 @@ impl IngestBodySerializer {
     pub fn count(&self) -> usize {
         self.count
     }
+
+    pub fn bytes_len(&self) -> usize {
+        self.buf.as_ref().map(|b| b.len()).unwrap_or(0)
+    }
 }
 
 pub fn line_serializer_source(
