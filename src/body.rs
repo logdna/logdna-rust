@@ -121,6 +121,15 @@ pub trait IntoIngestBodyBuffer {
 }
 
 #[async_trait]
+impl IntoIngestBodyBuffer for IngestBodyBuffer {
+    type Error = serde_json::error::Error;
+
+    async fn into(self) -> Result<IngestBodyBuffer, Self::Error> {
+        Ok(self)
+    }
+}
+
+#[async_trait]
 impl IntoIngestBodyBuffer for IngestBody {
     type Error = serde_json::error::Error;
 
