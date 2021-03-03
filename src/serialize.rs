@@ -453,6 +453,7 @@ impl IngestLineSerializer {
 
 pub struct IngestBodySerializer {
     pub(crate) buf: Option<IngestBuffer>,
+    count: usize,
     first: bool,
 }
 
@@ -473,6 +474,7 @@ impl IngestBodySerializer {
         Ok(Self {
             buf: Some(buf),
             first: true,
+            count: 0,
         })
     }
 
@@ -496,6 +498,7 @@ impl IngestBodySerializer {
         let mut buf = ser.write_line(from).await?;
         fmt.end_array_value(&mut buf)?;
         self.buf = Some(buf);
+        self.count += 1;
         Ok(())
     }
 
@@ -508,6 +511,10 @@ impl IngestBodySerializer {
 
         fmt.end_object(&mut wtr)?;
         Ok(wtr)
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
     }
 }
 
