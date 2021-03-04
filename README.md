@@ -5,7 +5,7 @@
 # Contributing
 
 Bug reports and pull requests are welcome on GitHub at
-https://github.com/logdna/ruby.
+https://github.com/logdna/logdna-rust.
 
 # License
 
