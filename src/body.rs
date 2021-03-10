@@ -175,6 +175,9 @@ pub trait LineMetaMut: LineMeta {
     fn set_labels(&mut self, labels: KeyValueMap) -> Result<(), LineMetaError>;
     fn set_level(&mut self, level: String) -> Result<(), LineMetaError>;
     fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError>;
+    fn get_line(&mut self) -> (Option<&str>, Option<&[u8]>);
+    fn set_line_text(&mut self, line: String) -> Result<(), LineMetaError>;
+    fn set_line_buffer(&mut self, line: Vec<u8>) -> Result<(), LineMetaError>;
 }
 
 /// Defines a log line, marking none required fields as Option
@@ -575,6 +578,18 @@ impl LineMetaMut for LineBuilder {
         self.meta = Some(meta);
         Ok(())
     }
+    fn get_line(&mut self) -> (Option<&str>, Option<&[u8]>) {
+        (self.line.as_deref(), None)
+    }
+    fn set_line_text(&mut self, line: String) -> Result<(), LineMetaError> {
+        self.line = Some(line);
+        Ok(())
+    }
+    fn set_line_buffer(&mut self, _line: Vec<u8>) -> Result<(), LineMetaError> {
+        Err(LineMetaError::Failed(
+            "buffer line can not be assigned for LineBuilder",
+        ))
+    }
 }
 
 impl LineMetaMut for &mut LineBuilder {
@@ -609,6 +624,18 @@ impl LineMetaMut for &mut LineBuilder {
     fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError> {
         self.meta = Some(meta);
         Ok(())
+    }
+    fn get_line(&mut self) -> (Option<&str>, Option<&[u8]>) {
+        (self.line.as_deref(), None)
+    }
+    fn set_line_text(&mut self, line: String) -> Result<(), LineMetaError> {
+        self.line = Some(line);
+        Ok(())
+    }
+    fn set_line_buffer(&mut self, _line: Vec<u8>) -> Result<(), LineMetaError> {
+        Err(LineMetaError::Failed(
+            "buffer line can not be assigned for LineBuilder",
+        ))
     }
 }
 
