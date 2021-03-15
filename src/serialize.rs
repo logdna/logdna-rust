@@ -1,6 +1,4 @@
-use futures::Future;
 use std::io;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -9,13 +7,9 @@ use serde::{Serialize, Serializer};
 use serde_json::ser::{CharEscape, Formatter};
 use thiserror::Error;
 
-use crate::segmented_buffer::{AllocBufferFn, Buffer};
+use crate::segmented_buffer::{AllocBufferFn, BufFut, Buffer};
 
-pub type IngestBuffer = crate::segmented_buffer::SegmentedPoolBuf<
-    Pin<Box<dyn Future<Output = Option<async_buf_pool::Reusable<Buffer>>> + std::marker::Send>>,
-    Buffer,
-    AllocBufferFn,
->;
+pub type IngestBuffer = crate::segmented_buffer::SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn>;
 
 #[derive(Debug, Error)]
 pub enum IngestLineSerializeError {

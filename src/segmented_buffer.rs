@@ -21,7 +21,8 @@ const DEFAULT_SEGMENT_SIZE: usize = 1024 * 16; // 16 KB
 
 pub(crate) type AllocBufferFn = Arc<dyn Fn() -> Buffer + std::marker::Send + std::marker::Sync>;
 
-type BufFut = Pin<Box<dyn Future<Output = Option<Reusable<Buffer>>> + std::marker::Send>>;
+pub(crate) type BufFut =
+    Pin<Box<dyn Future<Output = Option<Reusable<Buffer>>> + std::marker::Send + std::marker::Sync>>;
 
 pub enum Buffer {
     Write(BytesMut),
@@ -473,13 +474,7 @@ impl<F> std::io::Write for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     }
 }
 
-impl AsyncWrite
-    for SegmentedPoolBuf<
-        Pin<Box<dyn Future<Output = Option<Reusable<Buffer>>> + std::marker::Send>>,
-        Buffer,
-        AllocBufferFn,
-    >
-{
+impl AsyncWrite for SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn> {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
