@@ -580,9 +580,8 @@ impl SegmentedPoolBufBuilder {
     }
 
     /// Set the maximum size of the buffer, useful to implement backpressure on buffer consumers
-    #[allow(dead_code)]
-    pub fn max_size(mut self, max_size: usize) -> Self {
-        self.max_size = Some(max_size);
+    pub fn max_capacity(mut self, max_size: Option<usize>) -> Self {
+        self.max_size = max_size;
         self
     }
 
@@ -878,7 +877,7 @@ mod test {
                 .prop_flat_map(|size|(Just(size),
                                       proptest::collection::vec(proptest::num::u8::ANY, size)))){
 
-            let mut buf = SegmentedPoolBufBuilder::new().segment_size(2048).initial_capacity(4096).max_size(8192).build();
+            let mut buf = SegmentedPoolBufBuilder::new().segment_size(2048).initial_capacity(4096).max_capacity(Some(8192)).build();
             let res = aw!(async {
                 futures::AsyncWriteExt::write(&mut buf, &inp.1).await
             });

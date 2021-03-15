@@ -525,6 +525,7 @@ impl IngestBodySerializer {
 pub fn line_serializer_source(
     segment_size: usize,
     initial_capacity: usize,
+    max_capacity: Option<usize>,
 ) -> impl futures::stream::Stream<Item = IngestLineSerializer> {
     let segment_size2 = segment_size;
     let initial_capacity2 = segment_size;
@@ -540,6 +541,7 @@ pub fn line_serializer_source(
                         crate::segmented_buffer::SegmentedPoolBufBuilder::new()
                             .segment_size(segment_size2)
                             .initial_capacity(initial_capacity2)
+                            .max_capacity(max_capacity)
                             .with_pool(pool.clone()),
                     ),
                 },
@@ -552,6 +554,7 @@ pub fn line_serializer_source(
 pub fn body_serializer_source(
     segment_size: usize,
     initial_capacity: usize,
+    max_capacity: Option<usize>,
 ) -> impl futures::stream::Stream<Item = Result<IngestBodySerializer, IngestLineSerializeError>> {
     let segment_size2 = segment_size;
     let initial_capacity2 = segment_size;
@@ -566,6 +569,7 @@ pub fn body_serializer_source(
                     crate::segmented_buffer::SegmentedPoolBufBuilder::new()
                         .segment_size(segment_size2)
                         .initial_capacity(initial_capacity2)
+                        .max_capacity(max_capacity)
                         .with_pool(pool.clone()),
                 ),
                 pool,
