@@ -85,12 +85,13 @@ impl RequestTemplate {
 
                 let mut encoder = GzipEncoder::with_quality(buf, *level);
 
-                let _written = futures::io::copy_buf(body.buf.reader(), &mut encoder)
+                let _written = futures::io::copy_buf(body.reader(), &mut encoder)
                     .await
                     .map_err(RequestError::BuildIo)?;
                 encoder.close().await?;
 
-                let body = crate::body::IngestBodyBuffer::from_buffer(encoder.into_inner());
+                let body: crate::body::IngestBodyBuffer =
+                    crate::body::IngestBodyBuffer::from_buffer(encoder.into_inner());
 
                 Ok(builder.body(body)?)
             }
@@ -232,7 +233,7 @@ impl TemplateBuilder {
             pool: async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
                 SERIALIZATION_BUF_INITIAL_CAPACITY,
                 Arc::new(|| {
-                    Buffer::new(bytes::BytesMut::with_capacity(
+                    Buffer::Write(bytes::BytesMut::with_capacity(
                         SERIALIZATION_BUF_SEGMENT_SIZE,
                     ))
                 }),

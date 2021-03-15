@@ -80,7 +80,9 @@ impl Client {
             .map_err(move |e| HttpError::Other(Box::new(e)))?;
 
         let counts = countme::get::<
-            crate::segmented_buffer::SegmentedBuf<async_buf_pool::Reusable<bytes::BytesMut>>,
+            crate::segmented_buffer::SegmentedBuf<
+                async_buf_pool::Reusable<crate::segmented_buffer::Buffer>,
+            >,
         >();
         log::debug!(
             "live: {}, max_live: {}, total: {}",
@@ -107,7 +109,9 @@ impl Client {
         };
 
         let counts = countme::get::<
-            crate::segmented_buffer::SegmentedBuf<async_buf_pool::Reusable<bytes::BytesMut>>,
+            crate::segmented_buffer::SegmentedBuf<
+                async_buf_pool::Reusable<crate::segmented_buffer::Buffer>,
+            >,
         >();
         log::debug!(
             "live: {}, max_live: {}, total: {}",

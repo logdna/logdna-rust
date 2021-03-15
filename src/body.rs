@@ -10,8 +10,6 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use futures::ready;
-use futures::stream::Stream;
 use pin_project::pin_project;
 
 use crate::error::{LineError, LineMetaError};
@@ -21,16 +19,15 @@ use crate::serialize::{
 };
 
 #[pin_project]
-#[derive(Clone)]
 pub struct IngestBodyBuffer {
-    pub(crate) buf: crate::segmented_buffer::SegmentedBufBytes,
     #[pin]
-    stream: Option<crate::segmented_buffer::SegmentedBufStream>,
+    pub(crate) buf: crate::serialize::IngestBuffer,
 }
 
 impl core::fmt::Debug for IngestBodyBuffer {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let buf = self
+            .buf
             .buf
             .reader()
             .bytes()
@@ -46,7 +43,7 @@ impl core::fmt::Debug for IngestBodyBuffer {
 
 impl PartialEq for IngestBodyBuffer {
     fn eq(&self, other: &Self) -> bool {
-        for (a, b) in self.buf.reader().bytes().zip(other.buf.reader().bytes()) {
+        for (a, b) in self.reader().bytes().zip(other.reader().bytes()) {
             match (a, b) {
                 (Ok(a), Ok(b)) => {
                     if a != b {
@@ -62,34 +59,31 @@ impl PartialEq for IngestBodyBuffer {
 
 impl IngestBodyBuffer {
     pub fn from_buffer(ingest_buffer: crate::serialize::IngestBuffer) -> Self {
-        Self {
-            buf: ingest_buffer.into_bytes_stream(),
-            stream: None,
-        }
+        Self { buf: ingest_buffer }
     }
 
-    pub fn reader(&self) -> impl std::io::Read + '_ {
-        self.buf.reader()
+    pub fn reader(&self) -> impl std::io::Read + futures::AsyncBufRead + '_ {
+        self.buf.buf.reader()
+    }
+}
+
+impl Clone for IngestBodyBuffer {
+    fn clone(&self) -> Self {
+        IngestBodyBuffer::from_buffer(self.buf.clone())
     }
 }
 
 // TODO add test
 impl hyper::body::HttpBody for IngestBodyBuffer {
-    type Data = bytes::Bytes;
+    type Data = async_buf_pool::Reusable<crate::segmented_buffer::Buffer>;
     type Error = Box<crate::error::IngestBufError>; //crate::Error;
 
     fn poll_data(
         self: Pin<&mut Self>,
-        cx: &mut task::Context<'_>,
+        _: &mut task::Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
         let mut this = self.project();
-
-        if this.stream.is_none() {
-            this.stream.set(Some(this.buf.stream()))
-        }
-        // Infallible
-        let st = this.stream.as_pin_mut().unwrap();
-        Poll::Ready(ready!(st.poll_next(cx)).map(Ok))
+        Poll::Ready(this.buf.buf.bufs.pop().map(Ok))
     }
 
     fn poll_trailers(
