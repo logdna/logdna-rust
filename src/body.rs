@@ -12,16 +12,18 @@ use serde_json::Value;
 
 use pin_project::pin_project;
 
-use crate::error::{LineError, LineMetaError};
+use crate::error::{IngestBufError, LineError, LineMetaError};
 use crate::serialize::{
-    IngestLineSerialize, IngestLineSerializeError, SerializeI64, SerializeMap, SerializeStr,
-    SerializeUtf8, SerializeValue,
+    IngestBuffer, IngestLineSerialize, IngestLineSerializeError, SerializeI64, SerializeMap,
+    SerializeStr, SerializeUtf8, SerializeValue,
 };
+
+use crate::segmented_buffer::{Buffer, SegmentedPoolBufBuilder};
 
 #[pin_project]
 pub struct IngestBodyBuffer {
     #[pin]
-    pub(crate) buf: crate::serialize::IngestBuffer,
+    pub(crate) buf: IngestBuffer,
 }
 
 impl core::fmt::Debug for IngestBodyBuffer {
@@ -58,7 +60,7 @@ impl PartialEq for IngestBodyBuffer {
 }
 
 impl IngestBodyBuffer {
-    pub fn from_buffer(ingest_buffer: crate::serialize::IngestBuffer) -> Self {
+    pub fn from_buffer(ingest_buffer: IngestBuffer) -> Self {
         Self { buf: ingest_buffer }
     }
 
@@ -75,8 +77,8 @@ impl Clone for IngestBodyBuffer {
 
 // TODO add test
 impl hyper::body::HttpBody for IngestBodyBuffer {
-    type Data = async_buf_pool::Reusable<crate::segmented_buffer::Buffer>;
-    type Error = Box<crate::error::IngestBufError>; //crate::Error;
+    type Data = async_buf_pool::Reusable<Buffer>;
+    type Error = Box<IngestBufError>;
 
     fn poll_data(
         self: Pin<&mut Self>,
@@ -128,7 +130,7 @@ impl IntoIngestBodyBuffer for IngestBody {
     type Error = serde_json::error::Error;
 
     async fn into(self) -> Result<IngestBodyBuffer, Self::Error> {
-        let mut buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+        let mut buf = SegmentedPoolBufBuilder::new()
             .segment_size(2048)
             .initial_capacity(8192)
             .build();
@@ -143,7 +145,7 @@ impl<'a> IntoIngestBodyBuffer for &'a IngestBody {
     type Error = serde_json::error::Error;
 
     async fn into(self) -> Result<IngestBodyBuffer, Self::Error> {
-        let mut buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+        let mut buf = SegmentedPoolBufBuilder::new()
             .segment_size(2048)
             .initial_capacity(8192)
             .build();
@@ -728,6 +730,10 @@ impl From<BTreeMap<String, String>> for KeyValueMap {
 pub(crate) mod test {
     use super::*;
 
+    use std::io::Read;
+
+    use bytes::buf::BufExt;
+
     use proptest::collection::hash_map;
     use proptest::option::of;
     use proptest::prelude::*;
@@ -791,10 +797,8 @@ pub(crate) mod test {
         #[test]
         fn serialize_line(line in line_st()) {
             use crate::serialize::IngestLineSerializer;
-            use bytes::buf::BufExt;
-            use std::io::Read;
 
-            let buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new().segment_size(2048).build();
+            let buf = SegmentedPoolBufBuilder::new().segment_size(2048).build();
             let se = IngestLineSerializer {
                 buf: serde_json::Serializer::new(buf),
             };
@@ -818,10 +822,8 @@ pub(crate) mod test {
         #[test]
         fn serialize_lines(lines in proptest::collection::vec(line_st(), 5)) {
             use crate::serialize::IngestBodySerializer;
-            use bytes::buf::BufExt;
-            use std::io::Read;
 
-            let buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+            let buf = SegmentedPoolBufBuilder::new()
                 .segment_size(2048)
                 .initial_capacity(8192)
                 .build();
@@ -850,8 +852,6 @@ pub(crate) mod test {
 
         #[test]
         fn ingest_body_buffer_http_body(lines in proptest::collection::vec(line_st(), 5)) {
-            use std::io::Read;
-
             let ingest_body = IngestBody{lines};
             let serde_serialized = serde_json::to_string(&ingest_body).unwrap();
 

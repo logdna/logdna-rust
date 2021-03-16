@@ -532,7 +532,7 @@ pub fn line_serializer_source(
             Some((
                 IngestLineSerializer {
                     buf: serde_json::Serializer::new(
-                        crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+                        SegmentedPoolBufBuilder::new()
                             .segment_size(segment_size2)
                             .initial_capacity(initial_capacity2)
                             .max_capacity(max_capacity)
@@ -560,7 +560,7 @@ pub fn body_serializer_source(
         move |pool| async move {
             Some((
                 IngestBodySerializer::from_buffer(
-                    crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+                    SegmentedPoolBufBuilder::new()
                         .segment_size(segment_size2)
                         .initial_capacity(initial_capacity2)
                         .max_capacity(max_capacity)

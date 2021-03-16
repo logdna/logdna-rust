@@ -352,7 +352,6 @@ where
 }
 
 impl<F> SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
-
     pub fn len(&self) -> usize {
         self.buf.len()
     }
@@ -401,6 +400,7 @@ impl<F> std::io::Write for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
             // TODO: debug
             let written = self.buf.write(&buf[total_written..])?;
             total_written += written;
+
             if total_written == buf.len() {
                 break Ok(total_written);
             } else {
@@ -477,9 +477,8 @@ impl AsyncWrite for SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn> {
 
                         let pool = this.pool.clone();
 
-                        this.buf_fut.set(Some(Box::pin(async move {
-                            pool.pull().await
-                        })));
+                        this.buf_fut
+                            .set(Some(Box::pin(async move { pool.pull().await })));
                     }
                     *this.total_written = Some(total_written)
                 }
