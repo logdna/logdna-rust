@@ -19,8 +19,11 @@ use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
 use crate::segmented_buffer::{AllocBufferFn, Buffer};
 
-const SERIALIZATION_BUF_INITIAL_CAPACITY: usize = 1024 * 64;
 const SERIALIZATION_BUF_SEGMENT_SIZE: usize = 1024 * 16;
+
+const SERIALIZATION_BUF_RESERVE_SEGMENTS: usize = 100;
+
+const SERIALIZATION_BUF_INITIAL_CAPACITY: usize = 1024 * 64 / SERIALIZATION_BUF_SEGMENT_SIZE;
 
 /// A reusable template to generate requests from
 #[derive(Derivative)]
@@ -230,8 +233,9 @@ impl TemplateBuilder {
             return Err(e);
         };
         Ok(RequestTemplate {
-            pool: async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
+            pool: async_buf_pool::Pool::<AllocBufferFn, Buffer>::with_max_reserve(
                 SERIALIZATION_BUF_INITIAL_CAPACITY,
+                SERIALIZATION_BUF_RESERVE_SEGMENTS,
                 Arc::new(|| {
                     Buffer::new(bytes::BytesMut::with_capacity(
                         SERIALIZATION_BUF_SEGMENT_SIZE,

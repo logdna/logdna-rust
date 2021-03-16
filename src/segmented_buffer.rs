@@ -18,6 +18,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 const DEFAULT_SEGMENT_SIZE: usize = 1024 * 16; // 16 KB
+const SERIALIZATION_BUF_RESERVE_SEGMENTS: usize = 100;
 
 pub(crate) type AllocBufferFn = Arc<dyn Fn() -> Buffer + std::marker::Send + std::marker::Sync>;
 
@@ -532,8 +533,9 @@ impl SegmentedPoolBufBuilder {
     pub fn build(self) -> SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn> {
         let segment_size = self.segment_size.unwrap_or(DEFAULT_SEGMENT_SIZE);
         let pool =
-            Pool::<Arc<dyn Fn() -> Buffer + std::marker::Send + std::marker::Sync>, Buffer>::new(
+            Pool::<Arc<dyn Fn() -> Buffer + std::marker::Send + std::marker::Sync>, Buffer>::with_max_reserve(
                 self.initial_capacity.unwrap_or(DEFAULT_SEGMENT_SIZE) / segment_size + 1,
+                SERIALIZATION_BUF_RESERVE_SEGMENTS,
                 Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
             );
         self.with_pool(pool)

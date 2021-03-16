@@ -7,7 +7,9 @@ use serde::{Serialize, Serializer};
 use serde_json::ser::{CharEscape, Formatter};
 use thiserror::Error;
 
-use crate::segmented_buffer::{AllocBufferFn, BufFut, Buffer};
+use crate::segmented_buffer::{AllocBufferFn, BufFut, Buffer, SegmentedPoolBufBuilder};
+
+const SERIALIZATION_BUF_RESERVE_SEGMENTS: usize = 100;
 
 pub type IngestBuffer = crate::segmented_buffer::SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn>;
 
@@ -524,8 +526,9 @@ pub fn line_serializer_source(
     let segment_size2 = segment_size;
     let initial_capacity2 = segment_size;
     futures::stream::unfold(
-        async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
+        async_buf_pool::Pool::<AllocBufferFn, Buffer>::with_max_reserve(
             initial_capacity,
+            SERIALIZATION_BUF_RESERVE_SEGMENTS,
             Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
         ),
         move |pool| async move {
@@ -553,8 +556,9 @@ pub fn body_serializer_source(
     let segment_size2 = segment_size;
     let initial_capacity2 = segment_size;
     futures::stream::unfold(
-        async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
+        async_buf_pool::Pool::<AllocBufferFn, Buffer>::with_max_reserve(
             initial_capacity,
+            SERIALIZATION_BUF_RESERVE_SEGMENTS,
             Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
         ),
         move |pool| async move {
