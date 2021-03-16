@@ -233,7 +233,7 @@ impl TemplateBuilder {
             pool: async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
                 SERIALIZATION_BUF_INITIAL_CAPACITY,
                 Arc::new(|| {
-                    Buffer::Write(bytes::BytesMut::with_capacity(
+                    Buffer::new(bytes::BytesMut::with_capacity(
                         SERIALIZATION_BUF_SEGMENT_SIZE,
                     ))
                 }),

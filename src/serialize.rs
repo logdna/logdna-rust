@@ -526,7 +526,7 @@ pub fn line_serializer_source(
     futures::stream::unfold(
         async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
             initial_capacity,
-            Arc::new(move || Buffer::Write(BytesMut::with_capacity(segment_size))),
+            Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
         ),
         move |pool| async move {
             Some((
@@ -555,7 +555,7 @@ pub fn body_serializer_source(
     futures::stream::unfold(
         async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
             initial_capacity,
-            Arc::new(move || Buffer::Write(BytesMut::with_capacity(segment_size))),
+            Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
         ),
         move |pool| async move {
             Some((

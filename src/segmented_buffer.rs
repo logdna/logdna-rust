@@ -9,7 +9,7 @@ use async_buf_pool::{ClearBuf, Pool, Reusable};
 use bytes::buf::ext::Limit;
 use bytes::buf::Buf;
 use bytes::buf::BufMutExt;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 
 use futures::AsyncWrite;
 use pin_project::pin_project;
@@ -24,61 +24,37 @@ pub(crate) type AllocBufferFn = Arc<dyn Fn() -> Buffer + std::marker::Send + std
 pub(crate) type BufFut =
     Pin<Box<dyn Future<Output = Option<Reusable<Buffer>>> + std::marker::Send + std::marker::Sync>>;
 
-pub enum Buffer {
-    Write(BytesMut),
-    Read((Bytes, BytesMut)),
+pub struct Buffer {
+    pub(crate) buf: BytesMut,
+    _c: countme::Count<Self>,
+}
+
+impl Buffer {
+    pub fn new(bm: BytesMut) -> Self {
+        Buffer {
+            buf: bm,
+            _c: countme::Count::new(),
+        }
+    }
 }
 
 impl Buffer {
     fn len(&self) -> usize {
-        match self {
-            Buffer::Write(buf) => buf.len(),
-            Buffer::Read((buf, _)) => buf.len(),
-        }
+        self.buf.len()
     }
 
     pub fn inner(&self) -> &[u8] {
-        match self {
-            Buffer::Write(buf) => buf,
-            Buffer::Read((buf, _)) => buf,
-        }
+        &self.buf
     }
 
-    fn limit(&mut self, limit: usize) -> Option<Limit<&mut BytesMut>> {
-        match self {
-            Buffer::Write(buf) => Some(buf.limit(limit)),
-            // If it's frozen it's already limited
-            _ => None,
-        }
-    }
-    /*fn get_mut(&mut self) -> Option<&mut [u8]> {
-        match
-    }*/
-
-    fn freeze(self) -> Self {
-        match self {
-            Buffer::Write(mut buf) => {
-                let bytes = buf.split().freeze();
-                Self::Read((bytes, buf))
-            }
-            Buffer::Read(_) => self,
-        }
+    fn limit(&mut self, limit: usize) -> Limit<&mut BytesMut> {
+        (&mut self.buf).limit(limit)
     }
 }
 
 impl ClearBuf for Buffer {
     fn clear(&mut self) {
-        match self {
-            Buffer::Write(buf) => buf.clear(),
-            Buffer::Read((bytes, bytesmut)) => {
-                let reclaim = bytes.len();
-                let bytes = std::mem::replace(bytes, Bytes::new());
-                drop(bytes);
-                let mut bytesmut = std::mem::replace(bytesmut, BytesMut::new());
-                bytesmut.reserve(reclaim);
-                let _ = std::mem::replace(self, Buffer::Write(bytesmut));
-            }
-        }
+        self.buf.clear()
     }
 }
 
@@ -95,11 +71,7 @@ impl Buf for Buffer {
         does not change unless a call is made to advance or any other
         function that is documented to change the Buf's current position.
          */
-
-        match self {
-            Buffer::Write(buf) => buf.remaining(),
-            Buffer::Read((buf, _)) => buf.remaining(),
-        }
+        self.buf.remaining()
     }
 
     fn bytes(&self) -> &[u8] {
@@ -108,11 +80,7 @@ impl Buf for Buffer {
         reached, i.e., Buf::remaining returns 0, calls to bytes should
         return an empty slice.
          */
-
-        match self {
-            Buffer::Write(buf) => buf.bytes(),
-            Buffer::Read((buf, _)) => buf.bytes(),
-        }
+        self.buf.bytes()
     }
 
     fn advance(&mut self, cnt: usize) {
@@ -124,10 +92,7 @@ impl Buf for Buffer {
         A call with cnt == 0 should never panic and be a no-op.
          */
 
-        match self {
-            Buffer::Write(buf) => buf.advance(cnt),
-            Buffer::Read((buf, _)) => buf.advance(cnt),
-        }
+        self.buf.advance(cnt)
     }
 }
 
@@ -282,7 +247,6 @@ impl std::io::Write for SegmentedBuf<Reusable<Buffer>> {
                 let mut target_buf = self.bufs[self.pos]
                     .deref_mut()
                     .limit(self.segment_size)
-                    .expect("Buffer frozen")
                     .writer();
                 let written = std::io::Write::write(&mut target_buf, buf)?;
 
@@ -388,19 +352,6 @@ where
 }
 
 impl<F> SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
-    pub fn into_bytes_stream(mut self) -> SegmentedBufBytes {
-        self.buf
-            .bufs
-            .iter_mut()
-            .for_each(|b: &mut Reusable<Buffer>| {
-                let buf = std::mem::replace(b.get_mut(), Buffer::Write(BytesMut::new()));
-                let buf = buf.freeze();
-                let _ = std::mem::replace(b.get_mut(), buf);
-            });
-        SegmentedBufBytes {
-            bufs: self.buf.bufs.into_iter().collect(),
-        }
-    }
 
     pub fn len(&self) -> usize {
         self.buf.len()
@@ -584,7 +535,7 @@ impl SegmentedPoolBufBuilder {
         let pool =
             Pool::<Arc<dyn Fn() -> Buffer + std::marker::Send + std::marker::Sync>, Buffer>::new(
                 self.initial_capacity.unwrap_or(DEFAULT_SEGMENT_SIZE) / segment_size + 1,
-                Arc::new(move || Buffer::Write(BytesMut::with_capacity(segment_size))),
+                Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
             );
         self.with_pool(pool)
     }
@@ -611,19 +562,6 @@ impl Default for SegmentedPoolBufBuilder {
     }
 }
 
-pub struct SegmentedBufBytes {
-    bufs: SmallVec<[Reusable<Buffer>; 4]>,
-}
-
-impl SegmentedBufBytes {
-    pub fn reader(&self) -> SegmentedBufBytesReader {
-        SegmentedBufBytesReader {
-            buf: &self.bufs,
-            read_pos: 0,
-            read_offset: 0,
-        }
-    }
-}
 #[derive(Clone)]
 pub struct SegmentedBufBytesReader<'a> {
     buf: &'a SmallVec<[Reusable<Buffer>; 4]>,
