@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use async_buf_pool::{Pool, Reusable};
+use async_buf_pool::{ClearBuf, Pool, Reusable};
 use bytes::buf::ext::Limit;
 use bytes::buf::Buf;
 use bytes::buf::BufMutExt;
@@ -44,20 +44,6 @@ impl Buffer {
         }
     }
 
-    fn clear(&mut self) {
-        match self {
-            Buffer::Write(buf) => buf.clear(),
-            Buffer::Read((bytes, bytesmut)) => {
-                let reclaim = bytes.len();
-                let bytes = std::mem::replace(bytes, Bytes::new());
-                drop(bytes);
-                let mut bytesmut = std::mem::replace(bytesmut, BytesMut::new());
-                bytesmut.reserve(reclaim);
-                let _ = std::mem::replace(self, Buffer::Write(bytesmut));
-            }
-        }
-    }
-
     fn limit(&mut self, limit: usize) -> Option<Limit<&mut BytesMut>> {
         match self {
             Buffer::Write(buf) => Some(buf.limit(limit)),
@@ -76,6 +62,22 @@ impl Buffer {
                 Self::Read((bytes, buf))
             }
             Buffer::Read(_) => self,
+        }
+    }
+}
+
+impl ClearBuf for Buffer {
+    fn clear(&mut self) {
+        match self {
+            Buffer::Write(buf) => buf.clear(),
+            Buffer::Read((bytes, bytesmut)) => {
+                let reclaim = bytes.len();
+                let bytes = std::mem::replace(bytes, Bytes::new());
+                drop(bytes);
+                let mut bytesmut = std::mem::replace(bytesmut, BytesMut::new());
+                bytesmut.reserve(reclaim);
+                let _ = std::mem::replace(self, Buffer::Write(bytesmut));
+            }
         }
     }
 }
@@ -336,7 +338,10 @@ impl futures::io::AsyncBufRead for SegmentedBuf<Reusable<Buffer>> {
 }
 
 #[pin_project]
-pub struct SegmentedPoolBuf<Fut, T, Fi> {
+pub struct SegmentedPoolBuf<Fut, T, Fi>
+where
+    T: ClearBuf,
+{
     #[pin]
     pub(crate) pool: Pool<Fi, T>,
     #[pin]
@@ -366,7 +371,7 @@ impl From<SegmentedPoolBufError> for std::io::Error {
 
 impl<F, T, Fi> SegmentedPoolBuf<F, T, Arc<Fi>>
 where
-    T: std::marker::Send,
+    T: std::marker::Send + ClearBuf,
     Fi: Fn() -> T + std::marker::Send + std::marker::Sync + 'static + ?Sized,
 {
     pub fn iter(&self) -> SegmentedPoolBufIter<F, T, Arc<Fi>> {
@@ -450,9 +455,7 @@ impl<F> std::io::Write for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
             } else {
                 loop {
                     match self.pool.try_pull() {
-                        Ok(mut new_buf) => {
-                            // clear the BytesMut
-                            new_buf.clear();
+                        Ok(new_buf) => {
                             self.buf.attach(new_buf);
                             break;
                         }
@@ -524,11 +527,7 @@ impl AsyncWrite for SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn> {
                         let pool = this.pool.clone();
 
                         this.buf_fut.set(Some(Box::pin(async move {
-                            pool.pull().await.map(move |mut new_buf| {
-                                // clear the Buffer
-                                new_buf.clear();
-                                new_buf
-                            })
+                            pool.pull().await
                         })));
                     }
                     *this.total_written = Some(total_written)
@@ -742,7 +741,7 @@ impl futures::io::AsyncBufRead for SegmentedBufBytesReader<'_> {
 
 pub struct SegmentedPoolBufIter<'a, F, T, Fi>
 where
-    T: std::marker::Send,
+    T: std::marker::Send + ClearBuf,
 {
     pool: &'a SegmentedPoolBuf<F, T, Fi>,
     buf: usize,
@@ -751,7 +750,7 @@ where
 
 impl<'a, F, T, Fi> std::iter::Iterator for SegmentedPoolBufIter<'a, F, T, Fi>
 where
-    T: AsRef<[u8]> + Unpin + Send,
+    T: AsRef<[u8]> + ClearBuf + Unpin + Send,
 {
     type Item = u8;
 
