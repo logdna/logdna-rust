@@ -20,6 +20,8 @@ export CARGO_CACHE ?= $(shell pwd)/.cargo_cache
 RUST_COMMAND := $(DOCKER_DISPATCH) $(RUST_IMAGE)
 SHELLCHECK_COMMAND := $(DOCKER_DISPATCH) $(SHELLCHECK_IMAGE)
 
+$(info $(LOGDNA_HOST))
+$(info $(LOGDNA_INGESTION_KEY))
 .PHONY:check
 check: ## Run unit tests
 	$(RUST_COMMAND) "" "cargo check --all-targets"

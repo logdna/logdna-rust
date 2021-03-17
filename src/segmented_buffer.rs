@@ -832,9 +832,14 @@ mod test {
         let initial_pool_size = 2048;
         let segment_size = 256;
 
-        // Ensure we havn't allocated any bufs yet
+        {
+            let b = Buffer::new(BytesMut::new());
+            drop(b);
+            // Ensure we havn't allocated any bufs yet
+            let counts = countme::get::<Buffer>();
+            assert_eq!(counts.live, 0);
+        }
         let counts = countme::get::<Buffer>();
-        assert_eq!(counts.live, 0);
         let base_total = counts.total;
 
         let mut buf = SegmentedPoolBufBuilder::new()
