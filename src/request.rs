@@ -241,7 +241,8 @@ impl TemplateBuilder {
                         SERIALIZATION_BUF_SEGMENT_SIZE,
                     ))
                 }),
-            ),
+            )
+            .unwrap(),
             method: self.method.clone(),
             charset: self.charset.clone(),
             content: self.content.clone(),

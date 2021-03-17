@@ -9,8 +9,6 @@ use thiserror::Error;
 
 use crate::segmented_buffer::{AllocBufferFn, BufFut, Buffer, SegmentedPoolBufBuilder};
 
-const SERIALIZATION_BUF_RESERVE_SEGMENTS: usize = 100;
-
 pub type IngestBuffer = crate::segmented_buffer::SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn>;
 
 #[derive(Debug, Error)]
@@ -522,56 +520,70 @@ pub fn line_serializer_source(
     segment_size: usize,
     initial_capacity: usize,
     max_capacity: Option<usize>,
+    max_reserve_capacity: Option<usize>,
 ) -> impl futures::stream::Stream<Item = IngestLineSerializer> {
     let segment_size2 = segment_size;
-    let initial_capacity2 = segment_size;
-    futures::stream::unfold(
+    let initial_capacity2 = initial_capacity;
+    let pool = if let Some(max_reserve_capacity) = max_reserve_capacity {
         async_buf_pool::Pool::<AllocBufferFn, Buffer>::with_max_reserve(
             initial_capacity,
-            SERIALIZATION_BUF_RESERVE_SEGMENTS,
+            max_reserve_capacity,
             Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
-        ),
-        move |pool| async move {
-            Some((
-                IngestLineSerializer {
-                    buf: serde_json::Serializer::new(
-                        SegmentedPoolBufBuilder::new()
-                            .segment_size(segment_size2)
-                            .initial_capacity(initial_capacity2)
-                            .max_capacity(max_capacity)
-                            .with_pool(pool.clone()),
-                    ),
-                },
-                pool,
-            ))
-        },
-    )
-}
-
-pub fn body_serializer_source(
-    segment_size: usize,
-    initial_capacity: usize,
-    max_capacity: Option<usize>,
-) -> impl futures::stream::Stream<Item = Result<IngestBodySerializer, IngestLineSerializeError>> {
-    let segment_size2 = segment_size;
-    let initial_capacity2 = segment_size;
-    futures::stream::unfold(
-        async_buf_pool::Pool::<AllocBufferFn, Buffer>::with_max_reserve(
+        )
+        .unwrap()
+    } else {
+        async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
             initial_capacity,
-            SERIALIZATION_BUF_RESERVE_SEGMENTS,
             Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
-        ),
-        move |pool| async move {
-            Some((
-                IngestBodySerializer::from_buffer(
+        )
+    };
+    futures::stream::unfold(pool, move |pool| async move {
+        Some((
+            IngestLineSerializer {
+                buf: serde_json::Serializer::new(
                     SegmentedPoolBufBuilder::new()
                         .segment_size(segment_size2)
                         .initial_capacity(initial_capacity2)
                         .max_capacity(max_capacity)
                         .with_pool(pool.clone()),
                 ),
-                pool,
-            ))
-        },
-    )
+            },
+            pool,
+        ))
+    })
+}
+
+pub fn body_serializer_source(
+    segment_size: usize,
+    initial_capacity: usize,
+    max_capacity: Option<usize>,
+    max_reserve_capacity: Option<usize>,
+) -> impl futures::stream::Stream<Item = Result<IngestBodySerializer, IngestLineSerializeError>> {
+    let segment_size2 = segment_size;
+    let initial_capacity2 = initial_capacity;
+    let pool = if let Some(max_reserve_capacity) = max_reserve_capacity {
+        async_buf_pool::Pool::<AllocBufferFn, Buffer>::with_max_reserve(
+            initial_capacity,
+            max_reserve_capacity,
+            Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
+        )
+        .unwrap()
+    } else {
+        async_buf_pool::Pool::<AllocBufferFn, Buffer>::new(
+            initial_capacity,
+            Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
+        )
+    };
+    futures::stream::unfold(pool, move |pool| async move {
+        Some((
+            IngestBodySerializer::from_buffer(
+                SegmentedPoolBufBuilder::new()
+                    .segment_size(segment_size2)
+                    .initial_capacity(initial_capacity2)
+                    .max_capacity(max_capacity)
+                    .with_pool(pool.clone()),
+            ),
+            pool,
+        ))
+    })
 }

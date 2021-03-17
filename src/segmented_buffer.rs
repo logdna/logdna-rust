@@ -537,7 +537,7 @@ impl SegmentedPoolBufBuilder {
                 self.initial_capacity.unwrap_or(DEFAULT_SEGMENT_SIZE) / segment_size + 1,
                 SERIALIZATION_BUF_RESERVE_SEGMENTS,
                 Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
-            );
+            ).unwrap();
         self.with_pool(pool)
     }
 
