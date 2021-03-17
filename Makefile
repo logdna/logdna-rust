@@ -30,7 +30,7 @@ test-local:
 
 .PHONY:test
 test: ## Run unit tests
-	$(RUST_COMMAND) "--env RUST_BACKTRACE=full --env RUST_LOG=$(RUST_LOG) --env API_KEY=$(LOGDNA_INGESTION_KEY) " "cargo test --no-run && cargo test --release $(TESTS) -- --nocapture"
+	$(RUST_COMMAND) "--env RUST_BACKTRACE=full --env RUST_LOG=$(RUST_LOG) --env LOGDNA_HOST=$(LOGDNA_HOST) --env API_KEY=$(LOGDNA_INGESTION_KEY) " "cargo test --no-run && cargo test --lib --release $(TESTS) -- --nocapture"
 
 .PHONY:clean
 clean: ## Clean all artifacts from the build process
