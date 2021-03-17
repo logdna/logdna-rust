@@ -10,27 +10,26 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use futures::ready;
-use futures::stream::Stream;
 use pin_project::pin_project;
 
-use crate::error::{LineError, LineMetaError};
+use crate::error::{IngestBufError, LineError, LineMetaError};
 use crate::serialize::{
-    IngestLineSerialize, IngestLineSerializeError, SerializeI64, SerializeMap, SerializeStr,
-    SerializeUtf8, SerializeValue,
+    IngestBuffer, IngestLineSerialize, IngestLineSerializeError, SerializeI64, SerializeMap,
+    SerializeStr, SerializeUtf8, SerializeValue,
 };
 
+use crate::segmented_buffer::{Buffer, SegmentedPoolBufBuilder};
+
 #[pin_project]
-#[derive(Clone)]
 pub struct IngestBodyBuffer {
-    pub(crate) buf: crate::segmented_buffer::SegmentedBufBytes,
     #[pin]
-    stream: Option<crate::segmented_buffer::SegmentedBufStream>,
+    pub(crate) buf: IngestBuffer,
 }
 
 impl core::fmt::Debug for IngestBodyBuffer {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let buf = self
+            .buf
             .buf
             .reader()
             .bytes()
@@ -46,7 +45,7 @@ impl core::fmt::Debug for IngestBodyBuffer {
 
 impl PartialEq for IngestBodyBuffer {
     fn eq(&self, other: &Self) -> bool {
-        for (a, b) in self.buf.reader().bytes().zip(other.buf.reader().bytes()) {
+        for (a, b) in self.reader().bytes().zip(other.reader().bytes()) {
             match (a, b) {
                 (Ok(a), Ok(b)) => {
                     if a != b {
@@ -61,35 +60,32 @@ impl PartialEq for IngestBodyBuffer {
 }
 
 impl IngestBodyBuffer {
-    pub fn from_buffer(ingest_buffer: crate::serialize::IngestBuffer) -> Self {
-        Self {
-            buf: ingest_buffer.into_bytes_stream(),
-            stream: None,
-        }
+    pub fn from_buffer(ingest_buffer: IngestBuffer) -> Self {
+        Self { buf: ingest_buffer }
     }
 
-    pub fn reader(&self) -> impl std::io::Read + '_ {
-        self.buf.reader()
+    pub fn reader(&self) -> impl std::io::Read + futures::AsyncBufRead + '_ {
+        self.buf.buf.reader()
+    }
+}
+
+impl Clone for IngestBodyBuffer {
+    fn clone(&self) -> Self {
+        IngestBodyBuffer::from_buffer(self.buf.clone())
     }
 }
 
 // TODO add test
 impl hyper::body::HttpBody for IngestBodyBuffer {
-    type Data = bytes::Bytes;
-    type Error = Box<crate::error::IngestBufError>; //crate::Error;
+    type Data = async_buf_pool::Reusable<Buffer>;
+    type Error = Box<IngestBufError>;
 
     fn poll_data(
         self: Pin<&mut Self>,
-        cx: &mut task::Context<'_>,
+        _: &mut task::Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
         let mut this = self.project();
-
-        if this.stream.is_none() {
-            this.stream.set(Some(this.buf.stream()))
-        }
-        // Infallible
-        let st = this.stream.as_pin_mut().unwrap();
-        Poll::Ready(ready!(st.poll_next(cx)).map(Ok))
+        Poll::Ready(this.buf.buf.bufs.pop().map(Ok))
     }
 
     fn poll_trailers(
@@ -134,7 +130,7 @@ impl IntoIngestBodyBuffer for IngestBody {
     type Error = serde_json::error::Error;
 
     async fn into(self) -> Result<IngestBodyBuffer, Self::Error> {
-        let mut buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+        let mut buf = SegmentedPoolBufBuilder::new()
             .segment_size(2048)
             .initial_capacity(8192)
             .build();
@@ -149,7 +145,7 @@ impl<'a> IntoIngestBodyBuffer for &'a IngestBody {
     type Error = serde_json::error::Error;
 
     async fn into(self) -> Result<IngestBodyBuffer, Self::Error> {
-        let mut buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+        let mut buf = SegmentedPoolBufBuilder::new()
             .segment_size(2048)
             .initial_capacity(8192)
             .build();
@@ -734,6 +730,10 @@ impl From<BTreeMap<String, String>> for KeyValueMap {
 pub(crate) mod test {
     use super::*;
 
+    use std::io::Read;
+
+    use bytes::buf::BufExt;
+
     use proptest::collection::hash_map;
     use proptest::option::of;
     use proptest::prelude::*;
@@ -745,7 +745,7 @@ pub(crate) mod test {
             string_regex(".{1,64}").unwrap(),
             0..max_entries,
         )
-        .prop_map(|h| KeyValueMap(h))
+        .prop_map(KeyValueMap)
     }
 
     //recursive JSON type
@@ -797,10 +797,8 @@ pub(crate) mod test {
         #[test]
         fn serialize_line(line in line_st()) {
             use crate::serialize::IngestLineSerializer;
-            use bytes::buf::BufExt;
-            use std::io::Read;
 
-            let buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new().segment_size(2048).build();
+            let buf = SegmentedPoolBufBuilder::new().segment_size(2048).build();
             let se = IngestLineSerializer {
                 buf: serde_json::Serializer::new(buf),
             };
@@ -824,10 +822,8 @@ pub(crate) mod test {
         #[test]
         fn serialize_lines(lines in proptest::collection::vec(line_st(), 5)) {
             use crate::serialize::IngestBodySerializer;
-            use bytes::buf::BufExt;
-            use std::io::Read;
 
-            let buf = crate::segmented_buffer::SegmentedPoolBufBuilder::new()
+            let buf = SegmentedPoolBufBuilder::new()
                 .segment_size(2048)
                 .initial_capacity(8192)
                 .build();
@@ -856,8 +852,6 @@ pub(crate) mod test {
 
         #[test]
         fn ingest_body_buffer_http_body(lines in proptest::collection::vec(line_st(), 5)) {
-            use std::io::Read;
-
             let ingest_body = IngestBody{lines};
             let serde_serialized = serde_json::to_string(&ingest_body).unwrap();
 

@@ -5,10 +5,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use async_buf_pool::{Pool, Reusable};
+use async_buf_pool::{ClearBuf, Pool, Reusable};
+use bytes::buf::ext::Limit;
 use bytes::buf::Buf;
 use bytes::buf::BufMutExt;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 
 use futures::AsyncWrite;
 use pin_project::pin_project;
@@ -17,15 +18,90 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 const DEFAULT_SEGMENT_SIZE: usize = 1024 * 16; // 16 KB
+const SERIALIZATION_BUF_RESERVE_SEGMENTS: usize = 100;
 
-pub(crate) type AllocBytesMutFn = Arc<dyn Fn() -> BytesMut + std::marker::Send + std::marker::Sync>;
+pub(crate) type AllocBufferFn = Arc<dyn Fn() -> Buffer + std::marker::Send + std::marker::Sync>;
 
-type BufFut = Pin<Box<dyn Future<Output = Option<Reusable<BytesMut>>> + std::marker::Send>>;
+pub(crate) type BufFut =
+    Pin<Box<dyn Future<Output = Option<Reusable<Buffer>>> + std::marker::Send + std::marker::Sync>>;
+
+pub struct Buffer {
+    pub(crate) buf: BytesMut,
+    _c: countme::Count<Self>,
+}
+
+impl Buffer {
+    pub fn new(bm: BytesMut) -> Self {
+        Buffer {
+            buf: bm,
+            _c: countme::Count::new(),
+        }
+    }
+}
+
+impl Buffer {
+    fn len(&self) -> usize {
+        self.buf.len()
+    }
+
+    pub fn inner(&self) -> &[u8] {
+        &self.buf
+    }
+
+    fn limit(&mut self, limit: usize) -> Limit<&mut BytesMut> {
+        (&mut self.buf).limit(limit)
+    }
+}
+
+impl ClearBuf for Buffer {
+    fn clear(&mut self) {
+        self.buf.clear()
+    }
+}
+
+impl AsRef<[u8]> for Buffer {
+    fn as_ref(&self) -> &[u8] {
+        self.inner()
+    }
+}
+
+impl Buf for Buffer {
+    fn remaining(&self) -> usize {
+        /*
+        Implementations of remaining should ensure that the return value
+        does not change unless a call is made to advance or any other
+        function that is documented to change the Buf's current position.
+         */
+        self.buf.remaining()
+    }
+
+    fn bytes(&self) -> &[u8] {
+        /*
+        This function should never panic. Once the end of the buffer is
+        reached, i.e., Buf::remaining returns 0, calls to bytes should
+        return an empty slice.
+         */
+        self.buf.bytes()
+    }
+
+    fn advance(&mut self, cnt: usize) {
+        /*
+        It is recommended for implementations of advance to panic
+        if cnt > self.remaining(). If the implementation does not panic,
+        the call must behave as if cnt == self.remaining().
+
+        A call with cnt == 0 should never panic and be a no-op.
+         */
+
+        self.buf.advance(cnt)
+    }
+}
 
 // TODO: expose size when const generics become available
 #[derive(PartialEq)]
 pub struct SegmentedBuf<T> {
-    bufs: SmallVec<[T; 4]>,
+    _c: countme::Count<Self>,
+    pub(crate) bufs: SmallVec<[T; 4]>,
     pos: usize,
     offset: usize,
     read_pos: usize,
@@ -36,6 +112,7 @@ pub struct SegmentedBuf<T> {
 impl<T> SegmentedBuf<T> {
     pub fn new() -> Self {
         Self {
+            _c: countme::Count::new(),
             bufs: SmallVec::new(),
             pos: 0,
             offset: 0,
@@ -47,6 +124,7 @@ impl<T> SegmentedBuf<T> {
 
     pub fn with_segment_size(segment_size: usize) -> Self {
         Self {
+            _c: countme::Count::new(),
             bufs: SmallVec::new(),
             pos: 0,
             offset: 0,
@@ -66,7 +144,7 @@ impl<T> SegmentedBuf<T> {
     }
 }
 
-impl SegmentedBuf<Reusable<BytesMut>> {
+impl SegmentedBuf<Reusable<Buffer>> {
     pub fn len(&self) -> usize {
         let mut pos = self.pos;
         let mut rem = self.bufs[pos].len() - self.offset;
@@ -79,6 +157,14 @@ impl SegmentedBuf<Reusable<BytesMut>> {
 
         rem
     }
+
+    pub fn reader(&self) -> SegmentedBufBytesReader {
+        SegmentedBufBytesReader {
+            buf: &self.bufs,
+            read_pos: 0,
+            read_offset: 0,
+        }
+    }
 }
 
 impl<T> Default for SegmentedBuf<T> {
@@ -87,7 +173,7 @@ impl<T> Default for SegmentedBuf<T> {
     }
 }
 
-impl Buf for SegmentedBuf<Reusable<BytesMut>> {
+impl Buf for SegmentedBuf<Reusable<Buffer>> {
     fn remaining(&self) -> usize {
         /*
         Implementations of remaining should ensure that the return value
@@ -115,7 +201,7 @@ impl Buf for SegmentedBuf<Reusable<BytesMut>> {
          */
 
         let end = self.bufs[self.read_pos].len();
-        self.bufs[self.read_pos][self.read_offset..end].as_ref()
+        self.bufs[self.read_pos].inner()[self.read_offset..end].as_ref()
     }
 
     fn advance(&mut self, cnt: usize) {
@@ -151,7 +237,7 @@ impl Buf for SegmentedBuf<Reusable<BytesMut>> {
     }
 }
 
-impl std::io::Write for SegmentedBuf<Reusable<BytesMut>> {
+impl std::io::Write for SegmentedBuf<Reusable<Buffer>> {
     fn flush(&mut self) -> std::result::Result<(), std::io::Error> {
         Ok(())
     }
@@ -183,7 +269,7 @@ impl std::io::Write for SegmentedBuf<Reusable<BytesMut>> {
     }
 }
 
-impl futures::io::AsyncRead for SegmentedBuf<Reusable<BytesMut>> {
+impl futures::io::AsyncRead for SegmentedBuf<Reusable<Buffer>> {
     fn poll_read(
         mut self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
@@ -199,14 +285,14 @@ impl futures::io::AsyncRead for SegmentedBuf<Reusable<BytesMut>> {
     }
 }
 
-impl futures::io::AsyncBufRead for SegmentedBuf<Reusable<BytesMut>> {
+impl futures::io::AsyncBufRead for SegmentedBuf<Reusable<Buffer>> {
     fn poll_fill_buf(
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Result<&[u8], futures::io::Error>> {
         let this = self.get_mut();
         let end = this.bufs[this.read_pos].len();
-        let b = this.bufs[this.pos][this.read_offset..end].as_ref();
+        let b = this.bufs[this.pos].inner()[this.read_offset..end].as_ref();
 
         Poll::Ready(Ok(b))
     }
@@ -217,9 +303,12 @@ impl futures::io::AsyncBufRead for SegmentedBuf<Reusable<BytesMut>> {
 }
 
 #[pin_project]
-pub struct SegmentedPoolBuf<Fut, T, Fi> {
+pub struct SegmentedPoolBuf<Fut, T, Fi>
+where
+    T: ClearBuf,
+{
     #[pin]
-    pool: Pool<Fi, T>,
+    pub(crate) pool: Pool<Fi, T>,
     #[pin]
     pub buf: SegmentedBuf<Reusable<T>>,
     #[pin]
@@ -247,7 +336,7 @@ impl From<SegmentedPoolBufError> for std::io::Error {
 
 impl<F, T, Fi> SegmentedPoolBuf<F, T, Arc<Fi>>
 where
-    T: std::marker::Send,
+    T: std::marker::Send + ClearBuf,
     Fi: Fn() -> T + std::marker::Send + std::marker::Sync + 'static + ?Sized,
 {
     pub fn iter(&self) -> SegmentedPoolBufIter<F, T, Arc<Fi>> {
@@ -263,24 +352,33 @@ where
     }
 }
 
-impl<F> SegmentedPoolBuf<F, BytesMut, AllocBytesMutFn> {
-    pub fn into_bytes_stream(self) -> SegmentedBufBytes {
-        SegmentedBufBytes {
-            bufs: self
-                .buf
-                .bufs
-                .into_iter()
-                .map(move |mut b| Some(b.split().freeze()))
-                .collect(),
-        }
-    }
-
+impl<F> SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     pub fn len(&self) -> usize {
         self.buf.len()
     }
+
+    fn duplicate(&self) -> Self {
+        let buf = SegmentedBuf::with_segment_size(self.buf.segment_size);
+        Self {
+            pool: self.pool.clone(),
+            buf,
+            buf_fut: None,
+            total_written: None,
+            pool_buf_max_size: self.pool_buf_max_size,
+        }
+    }
 }
 
-impl<F> Buf for SegmentedPoolBuf<F, BytesMut, AllocBytesMutFn> {
+impl<F> Clone for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
+    fn clone(&self) -> Self {
+        let mut reader = self.buf.reader();
+        let mut ret = self.duplicate();
+        std::io::copy(&mut reader, &mut ret).unwrap();
+        ret
+    }
+}
+
+impl<F> Buf for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     fn remaining(&self) -> usize {
         self.buf.remaining()
     }
@@ -293,7 +391,7 @@ impl<F> Buf for SegmentedPoolBuf<F, BytesMut, AllocBytesMutFn> {
     }
 }
 
-impl<F> std::io::Write for SegmentedPoolBuf<F, BytesMut, AllocBytesMutFn> {
+impl<F> std::io::Write for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     fn flush(&mut self) -> std::result::Result<(), std::io::Error> {
         Ok(())
     }
@@ -303,30 +401,13 @@ impl<F> std::io::Write for SegmentedPoolBuf<F, BytesMut, AllocBytesMutFn> {
             // TODO: debug
             let written = self.buf.write(&buf[total_written..])?;
             total_written += written;
+
             if total_written == buf.len() {
                 break Ok(total_written);
             } else {
                 loop {
                     match self.pool.try_pull() {
-                        Ok(mut new_buf) => {
-                            // clear the BytesMut
-                            new_buf.clear();
-                            // reset BytesMut to full size
-                            let cap = new_buf.capacity();
-                            if cap < self.buf.segment_size {
-                                new_buf.reserve(self.buf.segment_size - cap);
-
-                                if let Some(max_size) = self.pool_buf_max_size {
-                                    // we're encountering bufs that are still in use, relieve the pressure a bit
-                                    if self.buf.bufs.len() * self.buf.segment_size
-                                        + self.buf.segment_size
-                                        > max_size
-                                    {
-                                        return Err(SegmentedPoolBufError::BufferFull {}.into());
-                                    }
-                                };
-                                self.pool.expand().unwrap();
-                            };
+                        Ok(new_buf) => {
                             self.buf.attach(new_buf);
                             break;
                         }
@@ -348,13 +429,7 @@ impl<F> std::io::Write for SegmentedPoolBuf<F, BytesMut, AllocBytesMutFn> {
     }
 }
 
-impl AsyncWrite
-    for SegmentedPoolBuf<
-        Pin<Box<dyn Future<Output = Option<Reusable<BytesMut>>> + std::marker::Send>>,
-        BytesMut,
-        AllocBytesMutFn,
-    >
-{
+impl AsyncWrite for SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn> {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -402,21 +477,9 @@ impl AsyncWrite
                         };
 
                         let pool = this.pool.clone();
-                        let segment_size = this.buf.segment_size;
 
-                        this.buf_fut.set(Some(Box::pin(async move {
-                            pool.pull().await.map(move |mut new_buf| {
-                                // clear the BytesMut
-                                new_buf.clear();
-                                // reset BytesMut to full size
-
-                                let cap = new_buf.capacity();
-                                if cap < segment_size {
-                                    new_buf.reserve(segment_size - cap);
-                                };
-                                new_buf
-                            })
-                        })));
+                        this.buf_fut
+                            .set(Some(Box::pin(async move { pool.pull().await })));
                     }
                     *this.total_written = Some(total_written)
                 }
@@ -462,28 +525,26 @@ impl SegmentedPoolBufBuilder {
     }
 
     /// Set the maximum size of the buffer, useful to implement backpressure on buffer consumers
-    #[allow(dead_code)]
-    pub fn max_size(mut self, max_size: usize) -> Self {
-        self.max_size = Some(max_size);
+    pub fn max_capacity(mut self, max_size: Option<usize>) -> Self {
+        self.max_size = max_size;
         self
     }
 
-    pub fn build(self) -> SegmentedPoolBuf<BufFut, BytesMut, AllocBytesMutFn> {
+    pub fn build(self) -> SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn> {
         let segment_size = self.segment_size.unwrap_or(DEFAULT_SEGMENT_SIZE);
-        let pool = Pool::<
-            Arc<dyn Fn() -> BytesMut + std::marker::Send + std::marker::Sync>,
-            BytesMut,
-        >::new(
-            self.initial_capacity.unwrap_or(DEFAULT_SEGMENT_SIZE) / segment_size + 1,
-            Arc::new(move || BytesMut::with_capacity(segment_size)),
-        );
+        let pool =
+            Pool::<Arc<dyn Fn() -> Buffer + std::marker::Send + std::marker::Sync>, Buffer>::with_max_reserve(
+                self.initial_capacity.unwrap_or(DEFAULT_SEGMENT_SIZE) / segment_size + 1,
+                SERIALIZATION_BUF_RESERVE_SEGMENTS,
+                Arc::new(move || Buffer::new(BytesMut::with_capacity(segment_size))),
+            ).unwrap();
         self.with_pool(pool)
     }
 
     pub fn with_pool(
         self,
-        pool: Pool<AllocBytesMutFn, BytesMut>,
-    ) -> SegmentedPoolBuf<BufFut, BytesMut, AllocBytesMutFn> {
+        pool: Pool<AllocBufferFn, Buffer>,
+    ) -> SegmentedPoolBuf<BufFut, Buffer, AllocBufferFn> {
         let segment_size = self.segment_size.unwrap_or(DEFAULT_SEGMENT_SIZE);
         let buf = SegmentedBuf::with_segment_size(segment_size);
         SegmentedPoolBuf {
@@ -503,29 +564,8 @@ impl Default for SegmentedPoolBufBuilder {
 }
 
 #[derive(Clone)]
-pub struct SegmentedBufBytes {
-    bufs: SmallVec<[Option<Bytes>; 4]>,
-}
-
-impl SegmentedBufBytes {
-    pub fn stream(&self) -> SegmentedBufStream {
-        SegmentedBufStream {
-            buf: self.bufs.clone(),
-            pos: 0,
-        }
-    }
-
-    pub fn reader(&self) -> SegmentedBufBytesReader {
-        SegmentedBufBytesReader {
-            buf: self,
-            read_pos: 0,
-            read_offset: 0,
-        }
-    }
-}
-#[derive(Clone)]
 pub struct SegmentedBufBytesReader<'a> {
-    buf: &'a SegmentedBufBytes,
+    buf: &'a SmallVec<[Reusable<Buffer>; 4]>,
     read_pos: usize,
     read_offset: usize,
 }
@@ -534,11 +574,11 @@ impl Buf for SegmentedBufBytesReader<'_> {
     fn remaining(&self) -> usize {
         let mut pos = self.read_pos;
 
-        let mut rem = self.buf.bufs[pos].as_ref().unwrap().len() - self.read_offset;
+        let mut rem = self.buf[pos].len() - self.read_offset;
         pos += 1;
 
-        while pos < self.buf.bufs.len() {
-            rem += self.buf.bufs[pos].as_ref().unwrap().len();
+        while pos < self.buf.len() {
+            rem += self.buf[pos].len();
             pos += 1;
         }
 
@@ -546,8 +586,8 @@ impl Buf for SegmentedBufBytesReader<'_> {
     }
 
     fn bytes(&self) -> &[u8] {
-        let end = self.buf.bufs[self.read_pos].as_ref().unwrap().len();
-        self.buf.bufs[self.read_pos].as_ref().unwrap()[self.read_offset..end].as_ref()
+        let end = self.buf[self.read_pos].len();
+        self.buf[self.read_pos].inner()[self.read_offset..end].as_ref()
     }
 
     fn advance(&mut self, cnt: usize) {
@@ -562,7 +602,7 @@ impl Buf for SegmentedBufBytesReader<'_> {
         let mut rem = cnt;
 
         while rem > 0 {
-            let avail = self.buf.bufs[self.read_pos].as_ref().unwrap().len() - self.read_offset;
+            let avail = self.buf[self.read_pos].len() - self.read_offset;
             if avail >= rem {
                 self.read_offset += rem;
                 rem = 0;
@@ -594,8 +634,8 @@ impl std::io::Read for SegmentedBufBytesReader<'_> {
 
 impl std::io::BufRead for SegmentedBufBytesReader<'_> {
     fn fill_buf(&mut self) -> Result<&[u8], std::io::Error> {
-        let end = self.buf.bufs[self.read_pos].as_ref().unwrap().len();
-        let b = self.buf.bufs[self.read_pos].as_ref().unwrap()[self.read_offset..end].as_ref();
+        let end = self.buf[self.read_pos].len();
+        let b = self.buf[self.read_pos].inner()[self.read_offset..end].as_ref();
 
         Ok(b)
     }
@@ -627,8 +667,8 @@ impl futures::io::AsyncBufRead for SegmentedBufBytesReader<'_> {
         _cx: &mut Context<'_>,
     ) -> Poll<Result<&[u8], futures::io::Error>> {
         let this = self.get_mut();
-        let end = this.buf.bufs[this.read_pos].as_ref().unwrap().len();
-        let b = this.buf.bufs[this.read_pos].as_ref().unwrap()[this.read_offset..end].as_ref();
+        let end = this.buf[this.read_pos].len();
+        let b = this.buf[this.read_pos].inner()[this.read_offset..end].as_ref();
 
         Poll::Ready(Ok(b))
     }
@@ -638,33 +678,9 @@ impl futures::io::AsyncBufRead for SegmentedBufBytesReader<'_> {
     }
 }
 
-#[derive(Clone)]
-pub struct SegmentedBufStream {
-    buf: SmallVec<[Option<Bytes>; 4]>,
-    pos: usize,
-}
-
-impl futures::stream::Stream for SegmentedBufStream {
-    type Item = Bytes;
-
-    fn poll_next(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Bytes>> {
-        if self.pos < self.buf.len() {
-            let cur_pos = self.pos;
-            let ret = Poll::Ready(Some(self.buf[cur_pos].take().unwrap()));
-            self.pos += 1;
-            ret
-        } else {
-            Poll::Ready(None)
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.buf.len(), Some(self.buf.len()))
-    }
-}
 pub struct SegmentedPoolBufIter<'a, F, T, Fi>
 where
-    T: std::marker::Send,
+    T: std::marker::Send + ClearBuf,
 {
     pool: &'a SegmentedPoolBuf<F, T, Fi>,
     buf: usize,
@@ -673,7 +689,7 @@ where
 
 impl<'a, F, T, Fi> std::iter::Iterator for SegmentedPoolBufIter<'a, F, T, Fi>
 where
-    T: AsRef<[u8]> + Unpin + Send,
+    T: AsRef<[u8]> + ClearBuf + Unpin + Send,
 {
     type Item = u8;
 
@@ -710,9 +726,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use tokio_test;
-
-    use futures::stream::StreamExt;
+    use serial_test::serial;
 
     macro_rules! aw {
         ($e:expr) => {
@@ -728,10 +742,12 @@ mod test {
         fn write_to_segmented_bool_buf(
             inp in (0..100*1024usize)
                 .prop_flat_map(|size|(Just(size),
-                                      proptest::collection::vec(proptest::num::u8::ANY, size)))){
+                                      proptest::collection::vec(proptest::num::u8::ANY, size)))) {
+
             let mut buf = SegmentedPoolBufBuilder::new().segment_size(2048).initial_capacity(8192).build();
+
             use std::io::Write;
-            buf.write(&inp.1).unwrap();
+            buf.write_all(&inp.1).unwrap();
 
             assert_eq!(buf.iter()
                        .zip(inp.1.iter())
@@ -740,6 +756,7 @@ mod test {
                                  acc && (a == *b)
                              }),
                        true);
+
             assert_eq!(inp.0, buf.iter().count());
 
         }
@@ -782,7 +799,7 @@ mod test {
                 .prop_flat_map(|size|(Just(size),
                                       proptest::collection::vec(proptest::num::u8::ANY, size)))){
 
-            let mut buf = SegmentedPoolBufBuilder::new().segment_size(2048).initial_capacity(4096).max_size(8192).build();
+            let mut buf = SegmentedPoolBufBuilder::new().segment_size(2048).initial_capacity(4096).max_capacity(Some(8192)).build();
             let res = aw!(async {
                 futures::AsyncWriteExt::write(&mut buf, &inp.1).await
             });
@@ -804,32 +821,74 @@ mod test {
 
     }
 
-    #[cfg(test)]
-    proptest! {
-        #[test]
-        fn segmentedbufstream_stream(
-            inp in (0..100*1024usize)
-                .prop_flat_map(|size|(Just(size),
-                                      proptest::collection::vec(proptest::num::u8::ANY, size)))){
+    #[test]
+    #[serial]
+    fn write_to_segmented_bool_buf_no_garbage_in_pool() {
+        let inp = vec![0; 16384];
 
-            let mut buf = SegmentedPoolBufBuilder::new().segment_size(2048).initial_capacity(4096).build();
-            let _bytes = aw!(async {
-                futures::AsyncWriteExt::write(&mut buf, &inp.1).await.unwrap();
+        countme::enable(true);
+        let serialization_buf_reserve_segments = 100;
 
-                buf.into_bytes_stream().stream().collect::<Vec<Bytes>>().await
-            });
-            // TODO
-            /*assert_eq!(buf.iter()
-                        .zip(inp.1.iter())
-                        .fold(true,
-                                |acc, (a, b)|{
-                                    acc && (a == *b)
-                                }),
-                        true);
-                        */
+        let initial_pool_size = 2048;
+        let segment_size = 256;
 
-            //assert_eq!(inp.0, buf.iter().count());
+        {
+            let b = Buffer::new(BytesMut::new());
+            drop(b);
+            // Ensure we havn't allocated any bufs yet
+            let counts = countme::get::<Buffer>();
+            assert_eq!(counts.live, 0);
+        }
+        let counts = countme::get::<Buffer>();
+        let base_total = counts.total;
+
+        let mut buf = SegmentedPoolBufBuilder::new()
+            .segment_size(segment_size)
+            .initial_capacity(initial_pool_size)
+            .build();
+        // Keep a reference to the pool around
+        let pool = buf.pool.clone();
+
+        // Ensure we havn't allocated more bufs than necessary
+        let counts = countme::get::<Buffer>();
+        assert!(counts.live > 0);
+        assert!(counts.live <= initial_pool_size / segment_size + 1);
+
+        use std::io::Write;
+        buf.write_all(&inp).unwrap();
+
+        assert_eq!(
+            buf.iter()
+                .zip(inp.iter())
+                .fold(true, |acc, (a, b)| { acc && (a == *b) }),
+            true
+        );
+
+        // Ensure we never allocated more buffers than were needed to hold the total elements
+        let counts = countme::get::<Buffer>();
+        assert!(
+            counts.total - base_total
+                <= std::cmp::max(
+                    inp.len() / segment_size + 1,
+                    initial_pool_size / segment_size + 1
+                )
+        );
+        assert_eq!(inp.len(), buf.iter().count());
+
+        let mut count = 0;
+        while count < serialization_buf_reserve_segments * segment_size + 1 {
+            count += inp.len();
+            buf.write_all(&inp).unwrap();
         }
 
+        drop(buf);
+        let counts = countme::get::<Buffer>();
+
+        // Ensure pool is cleared up
+        assert!(counts.live <= serialization_buf_reserve_segments);
+
+        drop(pool);
+        let counts = countme::get::<Buffer>();
+        assert!(counts.live == 0);
     }
 }

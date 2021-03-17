@@ -21,7 +21,7 @@ async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
 # async
 futures = "0.3"
 async-trait = "0.1"
-async-buf-pool =  { git= "https://github.com:/logdna/async-buf-pool-rs.git", branch="main", version = "*"}
+async-buf-pool =  { git= "https://github.com:/logdna/async-buf-pool-rs.git", tag="0.2", version = "0.2"}
 pin-project = "1"
 
 #tls
@@ -30,11 +30,13 @@ rustls-native-certs = "0.4"
 hyper-rustls = "0.21"
 
 #utils
+log = "0.4"
 chrono = "0.4"
 derivative = "2.1"
 smallvec = "1.5"
+countme = { version = "2.0.1", features = ["enable"] }
 
-#serailzation
+#serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_urlencoded = "0.5"
@@ -44,3 +46,4 @@ utf-8 = "0.7"
 tokio-test = "0.3"
 proptest = "0.10"
 flate2 = "1.0"
+serial_test = "0.5"
