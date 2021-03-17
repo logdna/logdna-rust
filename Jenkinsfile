@@ -58,7 +58,7 @@ pipeline {
                 ]]){
                     sh """
                         make lint
-                        make test
+                        make LOGDNA_INGESTION_KEY=${LOGDNA_INGESTION_KEY} test
                     """
                 }
             }
