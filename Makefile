@@ -25,12 +25,12 @@ check: ## Run unit tests
 	$(RUST_COMMAND) "" "cargo check --all-targets"
 
 test-local:
-	$(RUST_COMMAND) "" "cargo test --lib --release $(TESTS) -- --skip it_works --nocapture --test-threads=1"
+	$(RUST_COMMAND) "" "cargo test --lib --release $(TESTS) -- --skip it_works --nocapture"
 .PHONY:help
 
 .PHONY:test
 test: ## Run unit tests
-	$(RUST_COMMAND) "--env RUST_BACKTRACE=full --env RUST_LOG=$(RUST_LOG) --env LOGDNA_INGESTION_KEY=$(LOGDNA_INGESTION_KEY) " "cargo test --no-run && cargo test --release $(TESTS) -- --nocapture --test-threads=1"
+	$(RUST_COMMAND) "--env RUST_BACKTRACE=full --env RUST_LOG=$(RUST_LOG) --env LOGDNA_INGESTION_KEY=$(LOGDNA_INGESTION_KEY) " "cargo test --no-run && cargo test --release $(TESTS) -- --nocapture"
 
 .PHONY:clean
 clean: ## Clean all artifacts from the build process

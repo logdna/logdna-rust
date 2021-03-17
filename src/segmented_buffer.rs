@@ -726,6 +726,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use serial_test::serial;
 
     macro_rules! aw {
         ($e:expr) => {
@@ -743,17 +744,7 @@ mod test {
                 .prop_flat_map(|size|(Just(size),
                                       proptest::collection::vec(proptest::num::u8::ANY, size)))) {
 
-            countme::enable(true);
-
-            let counts = countme::get::<SegmentedBuf<Reusable<Buffer>>>();
-
-            // Ensure we havn't allocated any bufs yet
-            assert_eq!(counts.live, 0);
-
             let mut buf = SegmentedPoolBufBuilder::new().segment_size(2048).initial_capacity(8192).build();
-
-            // Ensure we havn't allocated more bufs than necessary
-            assert!(counts.live < 8192/2048);
 
             use std::io::Write;
             buf.write_all(&inp.1).unwrap();
@@ -766,8 +757,6 @@ mod test {
                              }),
                        true);
 
-            // Ensure we never allocated more buffers than were needed to hold the total elements
-            assert!(counts.total < std::cmp::max(inp.0/2048, 8192));
             assert_eq!(inp.0, buf.iter().count());
 
         }
@@ -833,6 +822,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn write_to_segmented_bool_buf_no_garbage_in_pool() {
         let inp = vec![0; 16384];
 
