@@ -1,7 +1,7 @@
 [package]
 name = "logdna-client"
-version = "0.3.0"
-authors = ["Connor Peticca <cjpet10@gmail.com>"]
+version = "0.4.0"
+authors = ["engineering@logdna.com"]
 edition = "2018"
 license = "MIT"
 description = "wrapper around LogDNA's Ingest API"
