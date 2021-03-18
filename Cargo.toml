@@ -13,7 +13,7 @@ thiserror = "1"
 #io
 bytes = "1"
 hyper = { version = "0.14", features = ["client", "tcp", "http1"] }
-tokio = "1.2"
+tokio = "1"
 http = "0.2"
 async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
 
@@ -31,9 +31,9 @@ hyper-rustls = "0.22"
 #utils
 log = "0.4"
 chrono = "0.4"
-derivative = "2.1"
-smallvec = "1.5"
-countme = "2.0"
+derivative = "2"
+smallvec = "1"
+countme = "2"
 
 #serialization
 serde = { version = "1", features = ["derive"] }
