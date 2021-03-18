@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["engineering@logdna.com"]
 edition = "2018"
 license = "MIT"
@@ -8,33 +8,32 @@ description = "wrapper around LogDNA's Ingest API"
 
 [dependencies]
 #error handling
-quick-error = "1"
 thiserror = "1"
 
 #io
-bytes = "0.5"
-hyper = "0.13"
-tokio = "0.2"
+bytes = "1"
+hyper = { version = "0.14", features = ["client", "tcp", "http1"] }
+tokio = "1"
 http = "0.2"
 async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
 
 # async
 futures = "0.3"
 async-trait = "0.1"
-async-buf-pool =  { git= "https://github.com:/logdna/async-buf-pool-rs.git", tag="0.2.0", version = "0.2" }
+async-buf-pool =  { git= "https://github.com:/logdna/async-buf-pool-rs.git", branch="0.3.x", version = "0.3"}
 pin-project = "1"
 
 #tls
-rustls = "0.18"
-rustls-native-certs = "0.4"
-hyper-rustls = "0.21"
+rustls = "0.19"
+rustls-native-certs = "0.5"
+hyper-rustls = "0.22"
 
 #utils
 log = "0.4"
 chrono = "0.4"
-derivative = "2.1"
-smallvec = "1.5"
-countme = { version = "2.0.1", features = ["enable"] }
+derivative = "2"
+smallvec = "1"
+countme = "2"
 
 #serialization
 serde = { version = "1", features = ["derive"] }
@@ -43,7 +42,9 @@ serde_urlencoded = "0.5"
 utf-8 = "0.7"
 
 [dev-dependencies]
-tokio-test = "0.3"
+tokio-test = "0.4"
+tokio = { version = "1.2", features = ["rt", "macros"] }
 proptest = "0.10"
 flate2 = "1.0"
 serial_test = "0.5"
+countme = { version = "2.0", features = ["enable"] }

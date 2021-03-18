@@ -6,9 +6,9 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use async_buf_pool::{ClearBuf, Pool, Reusable};
-use bytes::buf::ext::Limit;
 use bytes::buf::Buf;
-use bytes::buf::BufMutExt;
+use bytes::buf::BufMut;
+use bytes::buf::Limit;
 use bytes::BytesMut;
 
 use futures::AsyncWrite;
@@ -75,13 +75,13 @@ impl Buf for Buffer {
         self.buf.remaining()
     }
 
-    fn bytes(&self) -> &[u8] {
+    fn chunk(&self) -> &[u8] {
         /*
         This function should never panic. Once the end of the buffer is
         reached, i.e., Buf::remaining returns 0, calls to bytes should
         return an empty slice.
          */
-        self.buf.bytes()
+        self.buf.chunk()
     }
 
     fn advance(&mut self, cnt: usize) {
@@ -193,7 +193,7 @@ impl Buf for SegmentedBuf<Reusable<Buffer>> {
         rem
     }
 
-    fn bytes(&self) -> &[u8] {
+    fn chunk(&self) -> &[u8] {
         /*
         This function should never panic. Once the end of the buffer is
         reached, i.e., Buf::remaining returns 0, calls to bytes should
@@ -277,7 +277,7 @@ impl futures::io::AsyncRead for SegmentedBuf<Reusable<Buffer>> {
     ) -> Poll<futures::io::Result<usize>> {
         let mut total_written = 0;
         while total_written < buf.len() {
-            let written: usize = buf.write(self.bytes())?;
+            let written: usize = buf.write(self.chunk())?;
             self.deref_mut().advance(written);
             total_written += written;
         }
@@ -371,7 +371,7 @@ impl<F> SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
 
 impl<F> Clone for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     fn clone(&self) -> Self {
-        let mut reader = self.buf.reader();
+        let mut reader = (&self.buf).reader();
         let mut ret = self.duplicate();
         std::io::copy(&mut reader, &mut ret).unwrap();
         ret
@@ -383,8 +383,8 @@ impl<F> Buf for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
         self.buf.remaining()
     }
 
-    fn bytes(&self) -> &[u8] {
-        self.buf.bytes()
+    fn chunk(&self) -> &[u8] {
+        self.buf.chunk()
     }
     fn advance(&mut self, cnt: usize) {
         self.buf.advance(cnt)
@@ -585,7 +585,7 @@ impl Buf for SegmentedBufBytesReader<'_> {
         rem
     }
 
-    fn bytes(&self) -> &[u8] {
+    fn chunk(&self) -> &[u8] {
         let end = self.buf[self.read_pos].len();
         self.buf[self.read_pos].inner()[self.read_offset..end].as_ref()
     }
@@ -619,7 +619,7 @@ impl std::io::Read for SegmentedBufBytesReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let mut total_written = 0;
         while total_written < buf.len() {
-            let bytes: &[u8] = bytes::Buf::bytes(self);
+            let bytes: &[u8] = bytes::Buf::chunk(self);
             let amt = std::cmp::min(buf.len(), bytes.len());
             if amt == 0 {
                 break;
@@ -653,7 +653,7 @@ impl futures::io::AsyncRead for SegmentedBufBytesReader<'_> {
     ) -> Poll<futures::io::Result<usize>> {
         let mut total_written = 0;
         while total_written < buf.len() {
-            let written: usize = buf.write(self.bytes())?;
+            let written: usize = buf.write(self.chunk())?;
             self.deref_mut().advance(written);
             total_written += written;
         }
