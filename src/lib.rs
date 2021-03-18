@@ -110,17 +110,14 @@ mod segmented_buffer;
 mod tests {
     use std::env;
 
-    use tokio::runtime::Runtime;
-
     use crate::body::{IngestBody, KeyValueMap, Line};
     use crate::client::Client;
     use crate::params::{Params, Tags};
     use crate::request::RequestTemplate;
     use crate::response::Response;
 
-    #[test]
-    fn it_works() {
-        let mut rt = Runtime::new().expect("Runtime::new()");
+    #[tokio::test]
+    async fn it_works() {
         let params = Params::builder()
             .hostname("rust-client-test")
             .ip("127.0.0.1")
@@ -154,8 +151,7 @@ mod tests {
         );
         assert_eq!(
             Response::Sent,
-            rt.block_on(client.send(&IngestBody::new(vec![line])))
-                .unwrap()
+            client.send(&IngestBody::new(vec![line])).await.unwrap()
         )
     }
 }

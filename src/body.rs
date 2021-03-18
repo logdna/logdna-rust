@@ -732,7 +732,7 @@ pub(crate) mod test {
 
     use std::io::Read;
 
-    use bytes::buf::BufExt;
+    use bytes::buf::Buf;
 
     use proptest::collection::hash_map;
     use proptest::option::of;

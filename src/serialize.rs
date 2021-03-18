@@ -233,7 +233,7 @@ where
         fmt.begin_string(&mut wtr)?;
 
         while bytes.remaining() != 0 {
-            let chunk = bytes.bytes();
+            let chunk = bytes.chunk();
             let chunk_len = chunk.len();
             utf8::LossyDecoder::new(|s| {
                 format_escaped_str_contents(&mut wtr, &mut fmt, s).expect("Buf write can't fail")

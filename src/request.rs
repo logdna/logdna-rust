@@ -314,7 +314,7 @@ mod test {
     proptest! {
         #[test]
         fn request_template_body_round_trip(lines in proptest::collection::vec(line_st(), 5)) {
-            use bytes::buf::BufExt;
+            use bytes::buf::Buf;
             use std::io::Read;
             let params = Params::builder()
                 .hostname("rust-client-test")

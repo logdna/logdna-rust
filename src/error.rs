@@ -29,9 +29,9 @@ where
     T: Send + 'static,
 {
     Build(RequestError),
-    Send(T, hyper::error::Error),
+    Send(T, hyper::Error),
     Timeout(T),
-    Hyper(hyper::error::Error),
+    Hyper(hyper::Error),
     Utf8(std::str::Utf8Error),
     FromUtf8(std::string::FromUtf8Error),
     Serialization(serde_json::Error),
@@ -47,11 +47,11 @@ where
     }
 }
 
-impl<T> From<hyper::error::Error> for HttpError<T>
+impl<T> From<hyper::Error> for HttpError<T>
 where
     T: Send + 'static,
 {
-    fn from(e: hyper::error::Error) -> HttpError<T> {
+    fn from(e: hyper::Error) -> HttpError<T> {
         HttpError::Hyper(e)
     }
 }
