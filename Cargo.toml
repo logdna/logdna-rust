@@ -8,7 +8,6 @@ description = "wrapper around LogDNA's Ingest API"
 
 [dependencies]
 #error handling
-quick-error = "1"
 thiserror = "1"
 
 #io

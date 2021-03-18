@@ -86,9 +86,6 @@
 //! [Tokio]: https://github.com/tokio-rs/tokio
 //! [Tokio Runtume]: https://docs.rs/tokio/latest/tokio/runtime/index.html
 
-#[macro_use]
-extern crate quick_error;
-
 /// Log line and body types
 pub mod body;
 /// Http client

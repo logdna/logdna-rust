@@ -1,27 +1,21 @@
 use std::fmt::{Debug, Display, Error as FmtError, Formatter};
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum RequestError {
-        Build(err: http::Error) {
-            from()
-        }
-        BuildIo(err: std::io::Error) {
-             from()
-        }
-        Body(err: BodyError) {
-            from()
-        }
-    }
-}
-quick_error! {
-    #[derive(Debug)]
-    pub enum IngestBufError{
-        Any(err: &'static str){
-            from()
-        }
+use thiserror::Error;
 
-    }
+#[derive(Debug, Error)]
+pub enum RequestError {
+    #[error("{0}")]
+    Build(#[from] http::Error),
+    #[error("{0}")]
+    BuildIo(#[from] std::io::Error),
+    #[error("{0}")]
+    Body(#[from] BodyError),
+}
+
+#[derive(Debug, Error)]
+pub enum IngestBufError {
+    #[error("{0}")]
+    Any(&'static str),
 }
 
 pub enum HttpError<T>
@@ -110,53 +104,36 @@ where
     }
 }
 
-quick_error! {
-     #[derive(Debug)]
-     pub enum BodyError {
-        Json(err: serde_json::Error) {
-             from()
-        }
-        Gzip(err: std::io::Error) {
-             from()
-        }
-     }
+#[derive(Debug, Error)]
+pub enum BodyError {
+    #[error("{0}")]
+    Json(#[from] serde_json::Error),
+    #[error("{0}")]
+    Gzip(#[from] std::io::Error),
 }
 
-quick_error! {
-     #[derive(Debug)]
-     pub enum TemplateError {
-        InvalidHeader(err: http::header::InvalidHeaderValue) {
-             from()
-        }
-        RequiredField(err: std::string::String) {
-             from()
-        }
-     }
+#[derive(Debug, Error)]
+pub enum TemplateError {
+    #[error("{0}")]
+    InvalidHeader(#[from] http::header::InvalidHeaderValue),
+    #[error("{0}")]
+    RequiredField(std::string::String),
 }
 
-quick_error! {
-     #[derive(Debug)]
-     pub enum ParamsError {
-        RequiredField(err: std::string::String) {
-             from()
-        }
-     }
+#[derive(Debug, Error)]
+pub enum ParamsError {
+    #[error("{0}")]
+    RequiredField(std::string::String),
 }
 
-quick_error! {
-     #[derive(Debug)]
-     pub enum LineError {
-        RequiredField(err: std::string::String) {
-             from()
-        }
-     }
+#[derive(Debug, Error)]
+pub enum LineError {
+    #[error("{0}")]
+    RequiredField(std::string::String),
 }
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum LineMetaError{
-        Failed(err: &'static str){
-            from()
-        }
-    }
+#[derive(Debug, Error)]
+pub enum LineMetaError {
+    #[error("{0}")]
+    Failed(&'static str),
 }
