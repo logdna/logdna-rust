@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["engineering@logdna.com"]
 edition = "2018"
 license = "MIT"
@@ -38,13 +38,13 @@ countme = "2"
 #serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_urlencoded = "0.5"
+serde_urlencoded = "0.7"
 utf-8 = "0.7"
 
 [dev-dependencies]
 tokio-test = "0.4"
-tokio = { version = "1.2", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "macros"] }
 proptest = "0.10"
 flate2 = "1.0"
 serial_test = "0.5"
-countme = { version = "2.0", features = ["enable"] }
+countme = { version = "2", features = ["enable"] }
