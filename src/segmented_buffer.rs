@@ -146,15 +146,15 @@ impl<T> SegmentedBuf<T> {
 
 impl SegmentedBuf<Reusable<Buffer>> {
     pub fn len(&self) -> usize {
-        let mut pos = self.pos;
-        let mut rem = self.bufs[pos].len() - self.offset;
-        pos += 1;
-
-        while pos < self.bufs.len() {
+        let mut pos = 0;
+        let mut rem = 0;
+        // Count the full buffers
+        while pos < self.pos {
             rem += self.bufs[pos].len();
             pos += 1;
         }
-
+        // Add on the last, partial buffer
+        rem += self.offset;
         rem
     }
 
@@ -749,6 +749,7 @@ mod test {
             use std::io::Write;
             buf.write_all(&inp.1).unwrap();
 
+            assert_eq!(buf.len(), inp.0);
             assert_eq!(buf.iter()
                        .zip(inp.1.iter())
                        .fold(true,
@@ -758,7 +759,6 @@ mod test {
                        true);
 
             assert_eq!(inp.0, buf.iter().count());
-
         }
 
     }
@@ -778,6 +778,7 @@ mod test {
                 buf
             });
 
+            assert_eq!(buf.len(), inp.0);
             assert_eq!(buf.iter()
                        .zip(inp.1.iter())
                        .fold(true,
