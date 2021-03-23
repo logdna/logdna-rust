@@ -47,3 +47,6 @@ tokio-test = "0.3"
 proptest = "0.10"
 flate2 = "1.0"
 serial_test = "0.5"
+
+[profile.release]
+debug=true
