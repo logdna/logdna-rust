@@ -727,6 +727,7 @@ where
 mod test {
     use super::*;
     use serial_test::serial;
+    use std::sync::atomic::{fence, Ordering};
 
     macro_rules! aw {
         ($e:expr) => {
@@ -836,6 +837,7 @@ mod test {
         {
             let b = Buffer::new(BytesMut::new());
             drop(b);
+            fence(Ordering::SeqCst);
             // Ensure we havn't allocated any bufs yet
             let counts = countme::get::<Buffer>();
             assert_eq!(counts.live, 0);
@@ -850,6 +852,7 @@ mod test {
         // Keep a reference to the pool around
         let pool = buf.pool.clone();
 
+        fence(Ordering::SeqCst);
         // Ensure we havn't allocated more bufs than necessary
         let counts = countme::get::<Buffer>();
         assert!(counts.live > 0);
@@ -866,6 +869,7 @@ mod test {
         );
 
         // Ensure we never allocated more buffers than were needed to hold the total elements
+        fence(Ordering::SeqCst);
         let counts = countme::get::<Buffer>();
         assert!(
             counts.total - base_total
@@ -883,12 +887,14 @@ mod test {
         }
 
         drop(buf);
+        fence(Ordering::SeqCst);
         let counts = countme::get::<Buffer>();
 
         // Ensure pool is cleared up
         assert!(counts.live <= serialization_buf_reserve_segments);
 
         drop(pool);
+        fence(Ordering::SeqCst);
         let counts = countme::get::<Buffer>();
         assert!(counts.live == 0);
     }
