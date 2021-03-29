@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["engineering@logdna.com"]
 edition = "2018"
 license = "MIT"
@@ -47,3 +47,6 @@ tokio-test = "0.3"
 proptest = "0.10"
 flate2 = "1.0"
 serial_test = "0.5"
+
+[profile.release]
+debug=true
