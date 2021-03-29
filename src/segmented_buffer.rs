@@ -146,15 +146,15 @@ impl<T> SegmentedBuf<T> {
 
 impl SegmentedBuf<Reusable<Buffer>> {
     pub fn len(&self) -> usize {
-        let mut pos = self.pos;
-        let mut rem = self.bufs[pos].len() - self.offset;
-        pos += 1;
-
-        while pos < self.bufs.len() {
+        let mut pos = 0;
+        let mut rem = 0;
+        // Count the full buffers
+        while pos < self.pos {
             rem += self.bufs[pos].len();
             pos += 1;
         }
-
+        // Add on the last, partial buffer
+        rem += self.offset;
         rem
     }
 
@@ -727,6 +727,7 @@ where
 mod test {
     use super::*;
     use serial_test::serial;
+    use std::sync::atomic::{fence, Ordering};
 
     macro_rules! aw {
         ($e:expr) => {
@@ -749,6 +750,7 @@ mod test {
             use std::io::Write;
             buf.write_all(&inp.1).unwrap();
 
+            assert_eq!(buf.len(), inp.0);
             assert_eq!(buf.iter()
                        .zip(inp.1.iter())
                        .fold(true,
@@ -758,7 +760,6 @@ mod test {
                        true);
 
             assert_eq!(inp.0, buf.iter().count());
-
         }
 
     }
@@ -778,6 +779,7 @@ mod test {
                 buf
             });
 
+            assert_eq!(buf.len(), inp.0);
             assert_eq!(buf.iter()
                        .zip(inp.1.iter())
                        .fold(true,
@@ -835,6 +837,7 @@ mod test {
         {
             let b = Buffer::new(BytesMut::new());
             drop(b);
+            fence(Ordering::SeqCst);
             // Ensure we havn't allocated any bufs yet
             let counts = countme::get::<Buffer>();
             assert_eq!(counts.live, 0);
@@ -849,6 +852,7 @@ mod test {
         // Keep a reference to the pool around
         let pool = buf.pool.clone();
 
+        fence(Ordering::SeqCst);
         // Ensure we havn't allocated more bufs than necessary
         let counts = countme::get::<Buffer>();
         assert!(counts.live > 0);
@@ -865,6 +869,7 @@ mod test {
         );
 
         // Ensure we never allocated more buffers than were needed to hold the total elements
+        fence(Ordering::SeqCst);
         let counts = countme::get::<Buffer>();
         assert!(
             counts.total - base_total
@@ -882,12 +887,14 @@ mod test {
         }
 
         drop(buf);
+        fence(Ordering::SeqCst);
         let counts = countme::get::<Buffer>();
 
         // Ensure pool is cleared up
         assert!(counts.live <= serialization_buf_reserve_segments);
 
         drop(pool);
+        fence(Ordering::SeqCst);
         let counts = countme::get::<Buffer>();
         assert!(counts.live == 0);
     }
