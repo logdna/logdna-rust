@@ -19,6 +19,7 @@ use crate::serialize::{
 };
 
 use crate::segmented_buffer::{Buffer, SegmentedPoolBufBuilder};
+use std::str::from_utf8;
 
 #[pin_project]
 pub struct IngestBodyBuffer {
@@ -175,8 +176,11 @@ pub trait LineMetaMut: LineMeta {
     fn set_labels(&mut self, labels: KeyValueMap) -> Result<(), LineMetaError>;
     fn set_level(&mut self, level: String) -> Result<(), LineMetaError>;
     fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError>;
-    fn get_line(&mut self) -> (Option<&str>, Option<&[u8]>);
-    fn set_line_text(&mut self, line: String) -> Result<(), LineMetaError>;
+}
+
+/// Represents a line that provides accessor to the underlying data buffer for manipulation.
+pub trait LineBufferMut: LineMetaMut {
+    fn get_line_buffer(&mut self) -> Option<&[u8]>;
     fn set_line_buffer(&mut self, line: Vec<u8>) -> Result<(), LineMetaError>;
 }
 
@@ -578,18 +582,6 @@ impl LineMetaMut for LineBuilder {
         self.meta = Some(meta);
         Ok(())
     }
-    fn get_line(&mut self) -> (Option<&str>, Option<&[u8]>) {
-        (self.line.as_deref(), None)
-    }
-    fn set_line_text(&mut self, line: String) -> Result<(), LineMetaError> {
-        self.line = Some(line);
-        Ok(())
-    }
-    fn set_line_buffer(&mut self, _line: Vec<u8>) -> Result<(), LineMetaError> {
-        Err(LineMetaError::Failed(
-            "buffer line can not be assigned for LineBuilder",
-        ))
-    }
 }
 
 impl LineMetaMut for &mut LineBuilder {
@@ -625,17 +617,20 @@ impl LineMetaMut for &mut LineBuilder {
         self.meta = Some(meta);
         Ok(())
     }
-    fn get_line(&mut self) -> (Option<&str>, Option<&[u8]>) {
-        (self.line.as_deref(), None)
+}
+
+impl LineBufferMut for &mut LineBuilder {
+    fn get_line_buffer(&mut self) -> Option<&[u8]> {
+        self.line.as_deref().map(|x| x.as_bytes())
     }
-    fn set_line_text(&mut self, line: String) -> Result<(), LineMetaError> {
-        self.line = Some(line);
+    fn set_line_buffer(&mut self, line: Vec<u8>) -> Result<(), LineMetaError> {
+        self.line = Some(
+            from_utf8(&line)
+                // Only accept UTF-8 representations of the data for LineBuilder
+                .map_err(|_| LineMetaError::Failed("line was not a UTF-8 string"))?
+                .to_string(),
+        );
         Ok(())
-    }
-    fn set_line_buffer(&mut self, _line: Vec<u8>) -> Result<(), LineMetaError> {
-        Err(LineMetaError::Failed(
-            "buffer line can not be assigned for LineBuilder",
-        ))
     }
 }
 
