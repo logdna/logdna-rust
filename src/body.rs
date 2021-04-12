@@ -19,7 +19,6 @@ use crate::serialize::{
 };
 
 use crate::segmented_buffer::{Buffer, SegmentedPoolBufBuilder};
-use std::str::from_utf8;
 
 #[pin_project]
 pub struct IngestBodyBuffer {
@@ -625,10 +624,9 @@ impl LineBufferMut for &mut LineBuilder {
     }
     fn set_line_buffer(&mut self, line: Vec<u8>) -> Result<(), LineMetaError> {
         self.line = Some(
-            from_utf8(&line)
+            String::from_utf8(line)
                 // Only accept UTF-8 representations of the data for LineBuilder
-                .map_err(|_| LineMetaError::Failed("line was not a UTF-8 string"))?
-                .to_string(),
+                .map_err(|_| LineMetaError::Failed("line is not a UTF-8 string"))?,
         );
         Ok(())
     }
