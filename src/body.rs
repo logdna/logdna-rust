@@ -583,6 +583,21 @@ impl LineMetaMut for LineBuilder {
     }
 }
 
+impl LineBufferMut for LineBuilder {
+    fn get_line_buffer(&mut self) -> Option<&[u8]> {
+        self.line.as_deref().map(|x| x.as_bytes())
+    }
+
+    fn set_line_buffer(&mut self, line: Vec<u8>) -> Result<(), LineMetaError> {
+        self.line = Some(
+            String::from_utf8(line)
+                // Only accept UTF-8 representations of the data for LineBuilder
+                .map_err(|_| LineMetaError::Failed("line is not a UTF-8 string"))?,
+        );
+        Ok(())
+    }
+}
+
 impl LineMetaMut for &mut LineBuilder {
     fn set_annotations(&mut self, annotations: KeyValueMap) -> Result<(), LineMetaError> {
         self.annotations = Some(annotations);
