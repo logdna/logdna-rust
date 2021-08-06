@@ -797,13 +797,13 @@ mod test {
             let mut writer: Vec<u8> = Vec::with_capacity(inp.0);
             let mut reader = buf.buf.bytes_reader();
             std::io::copy(&mut reader, &mut writer).unwrap();
-            assert_eq!(inp.0, writer.len());
+            assert_eq!(inp.1, writer);
 
             // Test Buf impl (via it's reader adapter)
             let mut writer: Vec<u8> = vec![0; inp.0];
             let mut reader = buf.reader();
             std::io::Read::read(&mut reader, &mut writer[0..inp.0]).unwrap();
-            assert_eq!(inp.0, writer.len());
+            assert_eq!(inp.1, writer);
         }
 
     }
@@ -825,7 +825,7 @@ mod test {
                 let mut writer = vec![].compat_write();
                 let reader = buf.buf.bytes_reader();
                 tokio::io::copy(&mut reader.compat(), &mut writer).await.unwrap();
-                assert_eq!(inp.0, writer.get_ref().len());
+                assert_eq!(&inp.1, writer.get_ref());
                 buf
             });
 
