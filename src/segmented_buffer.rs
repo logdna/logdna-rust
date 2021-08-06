@@ -783,13 +783,12 @@ mod test {
             buf.write_all(&inp.1).unwrap();
 
             assert_eq!(buf.len(), inp.0);
-            assert_eq!(buf.iter()
+            assert!(buf.iter()
                        .zip(inp.1.iter())
                        .fold(true,
                              |acc, (a, b)|{
                                  acc && (a == *b)
-                             }),
-                       true);
+                             }));
 
             assert_eq!(inp.0, buf.iter().count());
 
@@ -830,13 +829,13 @@ mod test {
             });
 
             assert_eq!(buf.len(), inp.0);
-            assert_eq!(buf.iter()
+            assert!(buf.iter()
                        .zip(inp.1.iter())
                        .fold(true,
                              |acc, (a, b)|{
                                  acc && (a == *b)
-                             }),
-                       true);
+                             })
+                       );
             assert_eq!(inp.0, buf.iter().count());
 
         }
@@ -859,13 +858,13 @@ mod test {
                 assert!(res.is_err());
             } else {{
                 res.unwrap();
-                assert_eq!(buf.iter()
+                assert!(buf.iter()
                            .zip(inp.1.iter())
                            .fold(true,
                                  |acc, (a, b)|{
                                      acc && (a == *b)
-                                 }),
-                           true);
+                                 })
+                           );
                 assert_eq!(inp.0, buf.iter().count());
             }}
 
@@ -911,12 +910,10 @@ mod test {
         use std::io::Write;
         buf.write_all(&inp).unwrap();
 
-        assert_eq!(
-            buf.iter()
-                .zip(inp.iter())
-                .fold(true, |acc, (a, b)| { acc && (a == *b) }),
-            true
-        );
+        assert!(buf
+            .iter()
+            .zip(inp.iter())
+            .fold(true, |acc, (a, b)| { acc && (a == *b) }));
 
         // Ensure we never allocated more buffers than were needed to hold the total elements
         fence(Ordering::SeqCst);
