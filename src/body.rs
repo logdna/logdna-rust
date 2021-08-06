@@ -31,7 +31,7 @@ impl core::fmt::Debug for IngestBodyBuffer {
         let buf = self
             .buf
             .buf
-            .reader()
+            .bytes_reader()
             .bytes()
             .collect::<Result<Vec<u8>, _>>()
             .unwrap();
@@ -65,7 +65,7 @@ impl IngestBodyBuffer {
     }
 
     pub fn reader(&self) -> impl std::io::Read + futures::AsyncBufRead + '_ {
-        self.buf.buf.reader()
+        self.buf.buf.bytes_reader()
     }
 }
 
