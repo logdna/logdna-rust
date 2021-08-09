@@ -227,6 +227,7 @@ impl Buf for SegmentedBuf<Reusable<Buffer>> {
         loop {
             let avail = self.bufs[self.read_pos].len() - self.read_offset;
 
+            debug_assert!(avail != 0);
             if avail > rem {
                 self.read_offset += rem;
                 break;
@@ -620,6 +621,7 @@ impl Buf for SegmentedBufBytesReader<'_> {
         loop {
             let avail = self.buf[self.read_pos].len() - self.read_offset;
 
+            debug_assert!(avail != 0);
             if avail > rem {
                 self.read_offset += rem;
                 break;
