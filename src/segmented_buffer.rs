@@ -764,8 +764,11 @@ mod test {
     }
 
     #[test]
-    fn buf_impl_behaviour () {
-        let mut buf = SegmentedPoolBufBuilder::new().segment_size(1024).initial_capacity(8192).build();
+    fn buf_impl_behaviour() {
+        let mut buf = SegmentedPoolBufBuilder::new()
+            .segment_size(1024)
+            .initial_capacity(8192)
+            .build();
 
         let values: Vec<u8> = (0..16000).map(|x| (x % 256) as u8).collect();
         buf.write_all(values.as_slice()).unwrap();
@@ -808,7 +811,6 @@ mod test {
         reader.advance(11880);
         assert!(reader.chunk().is_empty());
         assert_eq!(reader.remaining(), 0);
-
     }
 
     use proptest::prelude::*;
