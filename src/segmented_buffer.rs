@@ -813,6 +813,23 @@ mod test {
             assert_eq!(reader.chunk().len(),  0);
             assert_eq!(reader.remaining(), 0);
 
+            let mut reader = buf.buf.bytes_reader();
+            // walk across reader efficiently
+
+            let mut count = 0;
+            while reader.remaining() > 0 {
+                let item_len = reader.chunk().len();
+                assert!(item_len > 0);
+                reader.advance(item_len);
+                count += item_len;
+            }
+            // Check that it was all read
+            assert_eq!(count, size);
+            // Check that there's nothing left
+            assert_eq!(reader.chunk().len(),  0);
+            assert_eq!(reader.remaining(), 0);
+
+
             // Check advancing the reader didn't effect the main buffer Buf impl
             assert_eq!(buf_remaining, buf.remaining());
 
@@ -831,7 +848,21 @@ mod test {
             assert_eq!(buf.chunk().len(),  0);
             assert_eq!(buf.remaining(), 0);
 
+            buf.reset_read();
+            assert_eq!(buf.remaining(), size);
 
+            let mut count = 0;
+            while buf.remaining() > 0 {
+                let item_len = buf.chunk().len();
+                assert!(item_len > 0);
+                buf.advance(item_len);
+                count += item_len;
+            }
+            // Check that it was all read
+            assert_eq!(count, size);
+            // Check that there's nothing left
+            assert_eq!(buf.chunk().len(),  0);
+            assert_eq!(buf.remaining(), 0);
         }
     }
 
