@@ -802,7 +802,7 @@ mod test {
             let mut count = 0;
             while count < size {
                 let step = std::cmp::min(max_step, reader.remaining());
-                assert!(reader.chunk().len() > 0);
+                assert!(!reader.chunk().is_empty());
                 reader.advance(step);
                 count += step;
             }
@@ -820,7 +820,7 @@ mod test {
             let mut count = 0;
             while count < size {
                 let step = std::cmp::min(max_step, buf.remaining());
-                assert!(buf.chunk().len() > 0);
+                assert!(!buf.chunk().is_empty());
                 buf.advance(step);
                 count += step;
             }
