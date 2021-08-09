@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["engineering@logdna.com"]
 edition = "2018"
 license = "MIT"
@@ -43,7 +43,8 @@ utf-8 = "0.7"
 
 [dev-dependencies]
 tokio-test = "0.4"
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "macros", "io-util"] }
+tokio-util = { version = "0.6", features = ["compat"] }
 proptest = "0.10"
 flate2 = "1.0"
 serial_test = "0.5"

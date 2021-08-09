@@ -19,6 +19,7 @@ use thiserror::Error;
 
 const DEFAULT_SEGMENT_SIZE: usize = 1024 * 16; // 16 KB
 const SERIALIZATION_BUF_RESERVE_SEGMENTS: usize = 100;
+const EMPTY: &[u8] = &[];
 
 pub(crate) type AllocBufferFn = Arc<dyn Fn() -> Buffer + std::marker::Send + std::marker::Sync>;
 
@@ -158,7 +159,7 @@ impl SegmentedBuf<Reusable<Buffer>> {
         rem
     }
 
-    pub fn reader(&self) -> SegmentedBufBytesReader {
+    pub fn bytes_reader(&self) -> SegmentedBufBytesReader {
         SegmentedBufBytesReader {
             buf: &self.bufs,
             read_pos: 0,
@@ -181,6 +182,11 @@ impl Buf for SegmentedBuf<Reusable<Buffer>> {
         function that is documented to change the Buf's current position.
          */
 
+        // We don't have any buffers
+        if self.bufs.is_empty() {
+            return 0;
+        }
+
         let mut pos = self.read_pos;
         let mut rem = self.bufs[pos].len() - self.read_offset;
         pos += 1;
@@ -200,19 +206,14 @@ impl Buf for SegmentedBuf<Reusable<Buffer>> {
         return an empty slice.
          */
 
+        if self.bufs.is_empty() {
+            return EMPTY;
+        }
         let end = self.bufs[self.read_pos].len();
         self.bufs[self.read_pos].inner()[self.read_offset..end].as_ref()
     }
 
     fn advance(&mut self, cnt: usize) {
-        /*
-        It is recommended for implementations of advance to panic
-        if cnt > self.remaining(). If the implementation does not panic,
-        the call must behave as if cnt == self.remaining().
-
-        A call with cnt == 0 should never panic and be a no-op.
-         */
-
         if cnt > self.remaining() {
             panic!("cnt is larger than the remaining bytes")
         }
@@ -223,15 +224,22 @@ impl Buf for SegmentedBuf<Reusable<Buffer>> {
 
         let mut rem = cnt;
 
-        while rem > 0 {
+        loop {
             let avail = self.bufs[self.read_pos].len() - self.read_offset;
-            if avail >= rem {
+
+            debug_assert!(avail != 0);
+            if avail > rem {
                 self.read_offset += rem;
-                rem = 0;
+                break;
             } else {
-                self.read_pos += 1;
-                self.read_offset = 0;
-                rem -= avail
+                rem -= avail;
+                if self.read_pos + 1 < self.bufs.len() {
+                    self.read_offset = 0;
+                    self.read_pos += 1;
+                } else {
+                    self.read_offset += avail;
+                    break;
+                }
             }
         }
     }
@@ -280,6 +288,9 @@ impl futures::io::AsyncRead for SegmentedBuf<Reusable<Buffer>> {
             let written: usize = buf.write(self.chunk())?;
             self.deref_mut().advance(written);
             total_written += written;
+            if written == 0 {
+                break;
+            }
         }
         Poll::Ready(Ok(total_written))
     }
@@ -371,7 +382,7 @@ impl<F> SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
 
 impl<F> Clone for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     fn clone(&self) -> Self {
-        let mut reader = (&self.buf).reader();
+        let mut reader = (&self.buf).bytes_reader();
         let mut ret = self.duplicate();
         std::io::copy(&mut reader, &mut ret).unwrap();
         ret
@@ -398,7 +409,6 @@ impl<F> std::io::Write for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     fn write(&mut self, buf: &[u8]) -> std::result::Result<usize, std::io::Error> {
         let mut total_written = 0;
         loop {
-            // TODO: debug
             let written = self.buf.write(&buf[total_written..])?;
             total_written += written;
 
@@ -572,6 +582,11 @@ pub struct SegmentedBufBytesReader<'a> {
 
 impl Buf for SegmentedBufBytesReader<'_> {
     fn remaining(&self) -> usize {
+        // We don't have any buffers
+        if self.buf.is_empty() {
+            return 0;
+        }
+
         let mut pos = self.read_pos;
 
         let mut rem = self.buf[pos].len() - self.read_offset;
@@ -581,11 +596,13 @@ impl Buf for SegmentedBufBytesReader<'_> {
             rem += self.buf[pos].len();
             pos += 1;
         }
-
         rem
     }
 
     fn chunk(&self) -> &[u8] {
+        if self.buf.is_empty() {
+            return EMPTY;
+        }
         let end = self.buf[self.read_pos].len();
         self.buf[self.read_pos].inner()[self.read_offset..end].as_ref()
     }
@@ -601,15 +618,22 @@ impl Buf for SegmentedBufBytesReader<'_> {
 
         let mut rem = cnt;
 
-        while rem > 0 {
+        loop {
             let avail = self.buf[self.read_pos].len() - self.read_offset;
-            if avail >= rem {
+
+            debug_assert!(avail != 0);
+            if avail > rem {
                 self.read_offset += rem;
-                rem = 0;
+                break;
             } else {
-                self.read_pos += 1;
-                self.read_offset = 0;
-                rem -= avail
+                rem -= avail;
+                if self.read_pos + 1 < self.buf.len() {
+                    self.read_offset = 0;
+                    self.read_pos += 1;
+                } else {
+                    self.read_offset += avail;
+                    break;
+                }
             }
         }
     }
@@ -619,12 +643,12 @@ impl std::io::Read for SegmentedBufBytesReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let mut total_written = 0;
         while total_written < buf.len() {
-            let bytes: &[u8] = bytes::Buf::chunk(self);
-            let amt = std::cmp::min(buf.len(), bytes.len());
+            let bytes: &[u8] = self.chunk();
+            let amt = std::cmp::min(buf.len() - total_written, bytes.len());
             if amt == 0 {
                 break;
             }
-            buf[total_written..amt].copy_from_slice(&bytes[..amt]);
+            buf[total_written..total_written + amt].copy_from_slice(&bytes[..amt]);
             self.advance(amt);
             total_written += amt;
         }
@@ -656,6 +680,9 @@ impl futures::io::AsyncRead for SegmentedBufBytesReader<'_> {
             let written: usize = buf.write(self.chunk())?;
             self.deref_mut().advance(written);
             total_written += written;
+            if written == 0 {
+                break;
+            }
         }
         Poll::Ready(Ok(total_written))
     }
@@ -728,6 +755,7 @@ mod test {
     use super::*;
     use serial_test::serial;
     use std::sync::atomic::{fence, Ordering};
+    use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
     macro_rules! aw {
         ($e:expr) => {
@@ -735,7 +763,169 @@ mod test {
         };
     }
 
+    #[test]
+    fn buf_impl_behaviour() {
+        let mut buf = SegmentedPoolBufBuilder::new()
+            .segment_size(1024)
+            .initial_capacity(8192)
+            .build();
+
+        let values: Vec<u8> = (0..16000).map(|x| (x % 256) as u8).collect();
+        buf.write_all(values.as_slice()).unwrap();
+
+        let mut reader = buf.buf.bytes_reader();
+
+        assert_eq!(reader.remaining(), 16000);
+
+        // advance less than a segment
+        reader.advance(1000);
+        assert_eq!(reader.chunk().len(), 24);
+        assert_eq!(reader.remaining(), 15000);
+        let expected: Vec<u8> = (1000..1024).map(|x| (x % 256) as u8).collect();
+        assert_eq!(reader.chunk(), expected.as_slice());
+
+        // advance exactly to the end of a segment
+        reader.advance(24);
+        assert_eq!(reader.chunk().len(), 1024);
+        assert_eq!(reader.remaining(), 14976);
+
+        // advance less than a segment
+        reader.advance(1000);
+        assert_eq!(reader.chunk().len(), 24);
+        assert_eq!(reader.remaining(), 13976);
+
+        // advance across a segment boundary
+        reader.advance(48);
+        assert_eq!(reader.chunk().len(), 1000);
+        assert_eq!(reader.remaining(), 13928);
+
+        // advance across multiple segment boundaries
+        reader.advance(2048);
+        assert_eq!(reader.chunk().len(), 1000);
+        assert_eq!(reader.remaining(), 11880);
+
+        let expected: Vec<u8> = (4120..5120).map(|x| (x % 256) as u8).collect();
+        assert_eq!(reader.chunk(), expected.as_slice());
+
+        // advance across multiple segment boundaries
+        reader.advance(11880);
+        assert!(reader.chunk().is_empty());
+        assert_eq!(reader.remaining(), 0);
+    }
+
     use proptest::prelude::*;
+
+    #[cfg(test)]
+    proptest! {
+        #[test]
+        fn buf_impls (
+            inp in (
+                (0..100*1024usize), // data size
+                (1..8*1024usize), // segment size
+            )
+                .prop_flat_map(|(size, segment_size)|{
+                    (Just(size),
+                     Just(segment_size),
+                     (segment_size..std::cmp::max(10*segment_size, 2)),
+                     proptest::collection::vec(proptest::num::u8::ANY, size),
+                     )
+                })) {
+
+            let (size, segment_size, initial_capacity, values) = inp;
+
+            let mut buf = SegmentedPoolBufBuilder::new().segment_size(segment_size).initial_capacity(initial_capacity).build();
+
+            buf.write_all(&values).unwrap();
+            // Check that all the bytes were written to the buffer
+            assert_eq!(buf.len(), size);
+
+            // Check buf remaining for Buf impl
+            assert_eq!(buf.remaining(), size);
+
+            let buf_remaining = buf.remaining();
+
+            let mut reader = buf.buf.bytes_reader();
+            // Check same for reader struct Buf impl
+            assert_eq!(reader.remaining(), size);
+
+            let max_step = std::cmp::min(200, segment_size);
+
+            // walk over the reader checking that there is data available when there should be
+            let mut count = 0;
+            while count < size {
+                let step = std::cmp::min(max_step, reader.remaining());
+                assert!(!reader.chunk().is_empty());
+                reader.advance(step);
+                count += step;
+            }
+
+            // Check that it was all read
+            assert_eq!(count, size);
+            // Check that there's nothing left
+            assert_eq!(reader.chunk().len(),  0);
+            assert_eq!(reader.remaining(), 0);
+
+            let mut reader = buf.buf.bytes_reader();
+            // walk across reader efficiently
+
+            let mut output = vec![];
+            let mut count = 0;
+            while reader.remaining() > 0 {
+                output.extend_from_slice(reader.chunk());
+                let item_len = reader.chunk().len();
+                assert!(item_len > 0);
+                reader.advance(item_len);
+                count += item_len;
+            }
+            // Check the values were copied correctly
+            assert_eq!(output, values);
+            // Check that it was all read
+            assert_eq!(count, size);
+            // Check that there's nothing left
+            assert_eq!(reader.chunk().len(),  0);
+            assert_eq!(reader.remaining(), 0);
+
+
+            // Check advancing the reader didn't effect the main buffer Buf impl
+            assert_eq!(buf_remaining, buf.remaining());
+
+            // walk over the buffer checking that there is data available when there should be
+            let mut count = 0;
+            while count < size {
+                let step = std::cmp::min(max_step, buf.remaining());
+                assert!(!buf.chunk().is_empty());
+
+                buf.advance(step);
+                count += step;
+            }
+
+            // Check that it was all read
+            assert_eq!(count, size);
+            // Check that there's nothing left
+            assert_eq!(buf.chunk().len(),  0);
+            assert_eq!(buf.remaining(), 0);
+
+            buf.reset_read();
+            assert_eq!(buf.remaining(), size);
+
+            let mut output = vec![];
+            let mut count = 0;
+            while buf.remaining() > 0 {
+                output.extend_from_slice(buf.chunk());
+                let item_len = buf.chunk().len();
+                assert!(item_len > 0);
+                buf.advance(item_len);
+                count += item_len;
+            }
+            // Check the values were copied correctly
+            assert_eq!(output, values);
+            // Check that it was all read
+            assert_eq!(count, size);
+            // Check that there's nothing left
+            assert_eq!(buf.chunk().len(),  0);
+            assert_eq!(buf.remaining(), 0);
+        }
+    }
 
     #[cfg(test)]
     proptest! {
@@ -751,15 +941,26 @@ mod test {
             buf.write_all(&inp.1).unwrap();
 
             assert_eq!(buf.len(), inp.0);
-            assert_eq!(buf.iter()
+            assert!(buf.iter()
                        .zip(inp.1.iter())
                        .fold(true,
                              |acc, (a, b)|{
                                  acc && (a == *b)
-                             }),
-                       true);
+                             }));
 
             assert_eq!(inp.0, buf.iter().count());
+
+            // test explicit bytes_reader object
+            let mut writer: Vec<u8> = Vec::with_capacity(inp.0);
+            let mut reader = buf.buf.bytes_reader();
+            std::io::copy(&mut reader, &mut writer).unwrap();
+            assert_eq!(inp.1, writer);
+
+            // Test Buf impl (via it's reader adapter)
+            let mut writer: Vec<u8> = vec![0; inp.0];
+            let mut reader = buf.reader();
+            std::io::Read::read(&mut reader, &mut writer[0..inp.0]).unwrap();
+            assert_eq!(inp.1, writer);
         }
 
     }
@@ -776,17 +977,23 @@ mod test {
                 let mut buf = SegmentedPoolBufBuilder::new().segment_size(2048).initial_capacity(8192).build();
 
                 futures::AsyncWriteExt::write(&mut buf, &inp.1).await.unwrap();
+
+                // test explicit bytes_reader object
+                let mut writer = vec![].compat_write();
+                let reader = buf.buf.bytes_reader();
+                tokio::io::copy(&mut reader.compat(), &mut writer).await.unwrap();
+                assert_eq!(&inp.1, writer.get_ref());
                 buf
             });
 
             assert_eq!(buf.len(), inp.0);
-            assert_eq!(buf.iter()
+            assert!(buf.iter()
                        .zip(inp.1.iter())
                        .fold(true,
                              |acc, (a, b)|{
                                  acc && (a == *b)
-                             }),
-                       true);
+                             })
+                       );
             assert_eq!(inp.0, buf.iter().count());
 
         }
@@ -809,13 +1016,13 @@ mod test {
                 assert!(res.is_err());
             } else {{
                 res.unwrap();
-                assert_eq!(buf.iter()
+                assert!(buf.iter()
                            .zip(inp.1.iter())
                            .fold(true,
                                  |acc, (a, b)|{
                                      acc && (a == *b)
-                                 }),
-                           true);
+                                 })
+                           );
                 assert_eq!(inp.0, buf.iter().count());
             }}
 
@@ -861,23 +1068,21 @@ mod test {
         use std::io::Write;
         buf.write_all(&inp).unwrap();
 
-        assert_eq!(
-            buf.iter()
-                .zip(inp.iter())
-                .fold(true, |acc, (a, b)| { acc && (a == *b) }),
-            true
-        );
+        assert!(buf
+            .iter()
+            .zip(inp.iter())
+            .fold(true, |acc, (a, b)| { acc && (a == *b) }));
 
         // Ensure we never allocated more buffers than were needed to hold the total elements
         fence(Ordering::SeqCst);
         let counts = countme::get::<Buffer>();
-        assert!(
-            counts.total - base_total
-                <= std::cmp::max(
-                    inp.len() / segment_size + 1,
-                    initial_pool_size / segment_size + 1
-                )
+        let max = std::cmp::max(
+            inp.len() / segment_size + 1,
+            initial_pool_size / segment_size + 1,
         );
+        let diff = counts.total - base_total;
+        assert!(max <= diff + 1);
+
         assert_eq!(inp.len(), buf.iter().count());
 
         let mut count = 0;
@@ -891,11 +1096,11 @@ mod test {
         let counts = countme::get::<Buffer>();
 
         // Ensure pool is cleared up
-        assert!(counts.live <= serialization_buf_reserve_segments);
+        assert!(counts.live <= serialization_buf_reserve_segments + 1);
 
         drop(pool);
         fence(Ordering::SeqCst);
         let counts = countme::get::<Buffer>();
-        assert!(counts.live == 0);
+        assert!(counts.live <= 1);
     }
 }
