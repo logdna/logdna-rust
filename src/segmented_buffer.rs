@@ -871,7 +871,7 @@ mod test {
             let mut output = vec![];
             let mut count = 0;
             while reader.remaining() > 0 {
-                output.extend_from_slice(&reader.chunk()[..]);
+                output.extend_from_slice(reader.chunk());
                 let item_len = reader.chunk().len();
                 assert!(item_len > 0);
                 reader.advance(item_len);
@@ -911,7 +911,7 @@ mod test {
             let mut output = vec![];
             let mut count = 0;
             while buf.remaining() > 0 {
-                output.extend_from_slice(&buf.chunk()[..]);
+                output.extend_from_slice(buf.chunk());
                 let item_len = buf.chunk().len();
                 assert!(item_len > 0);
                 buf.advance(item_len);
