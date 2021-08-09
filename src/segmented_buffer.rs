@@ -227,9 +227,6 @@ impl Buf for SegmentedBuf<Reusable<Buffer>> {
         loop {
             let avail = self.bufs[self.read_pos].len() - self.read_offset;
 
-            if avail == 0 {
-                break;
-            }
             if avail > rem {
                 self.read_offset += rem;
                 break;
@@ -623,9 +620,6 @@ impl Buf for SegmentedBufBytesReader<'_> {
         loop {
             let avail = self.buf[self.read_pos].len() - self.read_offset;
 
-            if avail == 0 {
-                break;
-            }
             if avail > rem {
                 self.read_offset += rem;
                 break;
@@ -772,8 +766,80 @@ mod test {
     #[cfg(test)]
     proptest! {
         #[test]
+        fn buf_impls (
+            inp in (
+                (0..100*1024usize), // data size
+                (0..8*1024usize), // segment size
+            )
+                .prop_flat_map(|(size, segment_size)|{
+                    (Just(size),
+                     Just(segment_size),
+                     (segment_size .. 10*segment_size),
+                     proptest::collection::vec(proptest::num::u8::ANY, size),
+                     )
+                })) {
+
+            let (size, segment_size, initial_capacity, values) = inp;
+
+            let mut buf = SegmentedPoolBufBuilder::new().segment_size(segment_size).initial_capacity(initial_capacity).build();
+
+            buf.write_all(&values).unwrap();
+            // Check that all the bytes were written to the buffer
+            assert_eq!(buf.len(), size);
+
+            // Check buf remaining for Buf impl
+            assert_eq!(buf.remaining(), size);
+
+            let buf_remaining = buf.remaining();
+
+            let mut reader = buf.buf.bytes_reader();
+            // Check same for reader struct Buf impl
+            assert_eq!(reader.remaining(), size);
+
+            let max_step = std::cmp::min(200, segment_size);
+
+            // walk over the reader checking that there is data available when there should be
+            let mut count = 0;
+            while count < size {
+                let step = std::cmp::min(max_step, reader.remaining());
+                assert!(reader.chunk().len() > 0);
+                reader.advance(step);
+                count += step;
+            }
+
+            // Check that it was all read
+            assert_eq!(count, size);
+            // Check that there's nothing left
+            assert_eq!(reader.chunk().len(),  0);
+            assert_eq!(reader.remaining(), 0);
+
+            // Check advancing the reader didn't effect the main buffer Buf impl
+            assert_eq!(buf_remaining, buf.remaining());
+
+            // walk over the buffer checking that there is data available when there should be
+            let mut count = 0;
+            while count < size {
+                let step = std::cmp::min(max_step, buf.remaining());
+                assert!(buf.chunk().len() > 0);
+                buf.advance(step);
+                count += step;
+            }
+
+            // Check that it was all read
+            assert_eq!(count, size);
+            // Check that there's nothing left
+            assert_eq!(buf.chunk().len(),  0);
+            assert_eq!(buf.remaining(), 0);
+
+
+        }
+    }
+
+    #[cfg(test)]
+    proptest! {
+        #[test]
         fn write_to_segmented_bool_buf(
-            inp in (0..10*1024usize)
+            inp in (0..100*1024usize)
                 .prop_flat_map(|size|(Just(size),
                                       proptest::collection::vec(proptest::num::u8::ANY, size)))) {
 
@@ -811,7 +877,7 @@ mod test {
     proptest! {
         #[test]
         fn async_write_to_segmented_bool_buf(
-            inp in (0..10*1024usize)
+            inp in (0..100*1024usize)
                 .prop_flat_map(|size|(Just(size),
                                       proptest::collection::vec(proptest::num::u8::ANY, size)))){
 
