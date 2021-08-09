@@ -818,13 +818,17 @@ mod test {
             let mut reader = buf.buf.bytes_reader();
             // walk across reader efficiently
 
+            let mut output = vec![];
             let mut count = 0;
             while reader.remaining() > 0 {
+                output.extend_from_slice(&reader.chunk()[..]);
                 let item_len = reader.chunk().len();
                 assert!(item_len > 0);
                 reader.advance(item_len);
                 count += item_len;
             }
+            // Check the values were copied correctly
+            assert_eq!(output, values);
             // Check that it was all read
             assert_eq!(count, size);
             // Check that there's nothing left
@@ -840,6 +844,7 @@ mod test {
             while count < size {
                 let step = std::cmp::min(max_step, buf.remaining());
                 assert!(!buf.chunk().is_empty());
+
                 buf.advance(step);
                 count += step;
             }
@@ -853,13 +858,17 @@ mod test {
             buf.reset_read();
             assert_eq!(buf.remaining(), size);
 
+            let mut output = vec![];
             let mut count = 0;
             while buf.remaining() > 0 {
+                output.extend_from_slice(&buf.chunk()[..]);
                 let item_len = buf.chunk().len();
                 assert!(item_len > 0);
                 buf.advance(item_len);
                 count += item_len;
             }
+            // Check the values were copied correctly
+            assert_eq!(output, values);
             // Check that it was all read
             assert_eq!(count, size);
             // Check that there's nothing left
