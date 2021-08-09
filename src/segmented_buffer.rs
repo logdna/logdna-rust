@@ -763,6 +763,54 @@ mod test {
         };
     }
 
+    #[test]
+    fn buf_impl_behaviour () {
+        let mut buf = SegmentedPoolBufBuilder::new().segment_size(1024).initial_capacity(8192).build();
+
+        let values: Vec<u8> = (0..16000).map(|x| (x % 256) as u8).collect();
+        buf.write_all(values.as_slice()).unwrap();
+
+        let mut reader = buf.buf.bytes_reader();
+
+        assert_eq!(reader.remaining(), 16000);
+
+        // advance less than a segment
+        reader.advance(1000);
+        assert_eq!(reader.chunk().len(), 24);
+        assert_eq!(reader.remaining(), 15000);
+        let expected: Vec<u8> = (1000..1024).map(|x| (x % 256) as u8).collect();
+        assert_eq!(reader.chunk(), expected.as_slice());
+
+        // advance exactly to the end of a segment
+        reader.advance(24);
+        assert_eq!(reader.chunk().len(), 1024);
+        assert_eq!(reader.remaining(), 14976);
+
+        // advance less than a segment
+        reader.advance(1000);
+        assert_eq!(reader.chunk().len(), 24);
+        assert_eq!(reader.remaining(), 13976);
+
+        // advance across a segment boundary
+        reader.advance(48);
+        assert_eq!(reader.chunk().len(), 1000);
+        assert_eq!(reader.remaining(), 13928);
+
+        // advance across multiple segment boundaries
+        reader.advance(2048);
+        assert_eq!(reader.chunk().len(), 1000);
+        assert_eq!(reader.remaining(), 11880);
+
+        let expected: Vec<u8> = (4120..5120).map(|x| (x % 256) as u8).collect();
+        assert_eq!(reader.chunk(), expected.as_slice());
+
+        // advance across multiple segment boundaries
+        reader.advance(11880);
+        assert!(reader.chunk().is_empty());
+        assert_eq!(reader.remaining(), 0);
+
+    }
+
     use proptest::prelude::*;
 
     #[cfg(test)]
@@ -771,12 +819,12 @@ mod test {
         fn buf_impls (
             inp in (
                 (0..100*1024usize), // data size
-                (0..8*1024usize), // segment size
+                (1..8*1024usize), // segment size
             )
                 .prop_flat_map(|(size, segment_size)|{
                     (Just(size),
                      Just(segment_size),
-                     (segment_size .. 10*segment_size),
+                     (segment_size..std::cmp::max(10*segment_size, 2)),
                      proptest::collection::vec(proptest::num::u8::ANY, size),
                      )
                 })) {
