@@ -67,6 +67,14 @@ impl IngestBodyBuffer {
     pub fn reader(&self) -> impl std::io::Read + futures::AsyncBufRead + '_ {
         self.buf.buf.bytes_reader()
     }
+
+    pub fn len(&self) -> usize {
+        self.buf.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.buf.is_empty()
+    }
 }
 
 impl Clone for IngestBodyBuffer {
@@ -828,6 +836,7 @@ pub(crate) mod test {
                 },
             )
     }
+
     proptest! {
         #[test]
         fn serialize_line(line in line_st()) {
@@ -894,7 +903,7 @@ pub(crate) mod test {
 
             let mut buf = String::new();
             ingest_body_buffer.reader().read_to_string(&mut buf).unwrap();
-            assert_eq!(serde_serialized.len(), buf.len());
+                assert_eq!(serde_serialized.len(), buf.len());
         }
     }
 }

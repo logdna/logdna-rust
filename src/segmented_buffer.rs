@@ -159,6 +159,10 @@ impl SegmentedBuf<Reusable<Buffer>> {
         rem
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.pos == 0 && self.offset == 0
+    }
+
     pub fn bytes_reader(&self) -> SegmentedBufBytesReader {
         SegmentedBufBytesReader {
             buf: &self.bufs,
@@ -366,6 +370,10 @@ where
 impl<F> SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     pub fn len(&self) -> usize {
         self.buf.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.buf.is_empty()
     }
 
     fn duplicate(&self) -> Self {
@@ -621,7 +629,7 @@ impl Buf for SegmentedBufBytesReader<'_> {
         loop {
             let avail = self.buf[self.read_pos].len() - self.read_offset;
 
-            debug_assert!(avail != 0);
+            assert!(avail != 0);
             if avail > rem {
                 self.read_offset += rem;
                 break;
@@ -817,6 +825,9 @@ mod test {
 
     #[cfg(test)]
     proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 1000, .. ProptestConfig::default()
+        })]
         #[test]
         fn buf_impls (
             inp in (
