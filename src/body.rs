@@ -903,7 +903,7 @@ pub(crate) mod test {
 
             let mut buf = String::new();
             ingest_body_buffer.reader().read_to_string(&mut buf).unwrap();
-                assert_eq!(serde_serialized.len(), buf.len());
+            assert_eq!(serde_serialized.len(), buf.len());
         }
     }
 }
