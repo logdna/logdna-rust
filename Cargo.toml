@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.5.4"
+version = "0.5.5"
 authors = ["engineering@logdna.com"]
 edition = "2018"
 license = "MIT"
@@ -30,7 +30,7 @@ hyper-rustls = "0.22"
 
 #utils
 log = "0.4"
-chrono = "0.4"
+time = "0.3"
 derivative = "2"
 smallvec = "1"
 countme = "2"

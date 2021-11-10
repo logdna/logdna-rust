@@ -6,9 +6,9 @@ use std::pin::Pin;
 use std::task::{self, Poll};
 
 use async_trait::async_trait;
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use time::OffsetDateTime;
 
 use pin_project::pin_project;
 
@@ -470,7 +470,7 @@ impl LineBuilder {
             line: self
                 .line
                 .ok_or_else(|| LineError::RequiredField("line field is required".into()))?,
-            timestamp: Utc::now().timestamp(),
+            timestamp: OffsetDateTime::now_utc().unix_timestamp(),
         })
     }
 }
