@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use async_compression::futures::write::GzipEncoder;
 use async_compression::Level;
-use chrono::Utc;
 use derivative::Derivative;
 use futures::io::AsyncWriteExt;
 use http::header::HeaderValue;
@@ -14,6 +13,7 @@ use http::header::USER_AGENT;
 use http::request::Builder as RequestBuilder;
 use http::Method;
 use hyper::Request;
+use time::OffsetDateTime;
 
 use crate::error::{RequestError, TemplateError};
 use crate::params::Params;
@@ -65,9 +65,12 @@ impl RequestTemplate {
     ) -> Result<Request<crate::body::IngestBodyBuffer>, RequestError> {
         let builder = RequestBuilder::new();
 
-        let params =
-            serde_urlencoded::to_string(self.params.clone().set_now(Utc::now().timestamp()))
-                .expect("cant'fail!");
+        let params = serde_urlencoded::to_string(
+            self.params
+                .clone()
+                .set_now(OffsetDateTime::now_utc().unix_timestamp()),
+        )
+        .expect("cant'fail!");
 
         let mut builder = builder
             .method(self.method.clone())
