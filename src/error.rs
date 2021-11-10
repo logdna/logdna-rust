@@ -29,7 +29,7 @@ where
     Utf8(std::str::Utf8Error),
     FromUtf8(std::string::FromUtf8Error),
     Serialization(serde_json::Error),
-    Other(Box<dyn std::error::Error>),
+    Other(Box<dyn std::error::Error + Send + 'static>),
 }
 
 impl<T> From<RequestError> for HttpError<T>
