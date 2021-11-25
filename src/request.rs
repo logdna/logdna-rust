@@ -72,15 +72,13 @@ impl RequestTemplate {
         )
         .expect("cant'fail!");
 
-        let mut builder = builder
+        let builder = builder
             .method(self.method.clone())
             .header(ACCEPT_CHARSET, self.charset.clone())
             .header(CONTENT_TYPE, self.content.clone())
             .header(USER_AGENT, self.user_agent.clone())
             .header("apiKey", self.api_key.clone())
             .uri(self.schema.to_string() + &self.host + &self.endpoint + "?" + &params);
-
-        self.encoding.set_builder_encoding(&mut builder);
 
         match &self.encoding {
             Encoding::GzipJson(level) => {
@@ -99,7 +97,9 @@ impl RequestTemplate {
                 let body: crate::body::IngestBodyBuffer =
                     crate::body::IngestBodyBuffer::from_buffer(encoder.into_inner());
 
-                Ok(builder.body(body)?)
+                Ok(builder
+                    .header(CONTENT_ENCODING, HeaderValue::from_static("gzip"))
+                    .body(body)?)
             }
             Encoding::Json => Ok(builder.body(body.clone())?),
         }
@@ -211,8 +211,18 @@ impl TemplateBuilder {
         self
     }
     /// Set the host field
-    pub fn host<T: Into<String>>(&mut self, host: T) -> &mut Self {
-        self.host = host.into();
+    pub fn host<T: Into<String>>(&mut self, host: T) -> &mut Self
+    where
+        T: TryInto<HeaderValue, Error = http::header::InvalidHeaderValue>,
+    {
+        let host = host.into();
+        if host.is_empty() {
+            self.err = Some(TemplateError::RequiredField(
+                "host is required to be non-empty in a TemplateBuilder".to_string(),
+            ))
+        } else {
+            self.host = host;
+        }
         self
     }
     /// Set the endpoint field
@@ -222,7 +232,14 @@ impl TemplateBuilder {
     }
     /// Set the api_key field
     pub fn api_key<T: Into<String>>(&mut self, api_key: T) -> &mut Self {
-        self.api_key = Some(api_key.into());
+        let api_key = api_key.into();
+        if api_key.is_empty() {
+            self.err = Some(TemplateError::RequiredField(
+                "api_key is required to be non-empty in a TemplateBuilder".to_string(),
+            ))
+        } else {
+            self.api_key = Some(api_key);
+        }
         self
     }
     /// Set the params field
@@ -267,23 +284,6 @@ impl TemplateBuilder {
 impl Default for TemplateBuilder {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Encoding {
-    fn set_builder_encoding<'a>(&self, builder: &'a mut RequestBuilder) -> &'a mut RequestBuilder {
-        use crate::request::Encoding::*;
-        {
-            let headers = builder.headers_mut().unwrap();
-
-            match self {
-                GzipJson(_) => {
-                    headers.insert(CONTENT_ENCODING, HeaderValue::from_static("gzip"));
-                    builder
-                }
-                Json => builder,
-            }
-        }
     }
 }
 
