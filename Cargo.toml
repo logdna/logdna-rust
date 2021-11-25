@@ -12,7 +12,7 @@ thiserror = "1"
 
 #io
 bytes = "1"
-hyper = { version = "0.14", features = ["client", "tcp", "http1"] }
+hyper = { version = "0.14", features = ["client", "tcp", "http1", "http2"] }
 tokio = "1"
 http = "0.2"
 async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
@@ -24,9 +24,8 @@ async-buf-pool =  { git= "https://github.com:/logdna/async-buf-pool-rs.git", bra
 pin-project = "1"
 
 #tls
-rustls = "0.19"
-rustls-native-certs = "0.5"
-hyper-rustls = "0.22"
+rustls = "0.20"
+hyper-rustls = { version = "0.23", features = ["http2"] }
 
 #utils
 log = "0.4"
