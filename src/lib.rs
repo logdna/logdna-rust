@@ -115,6 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_works() {
+        env_logger::init();
         let params = Params::builder()
             .hostname("rust-client-test")
             .ip("127.0.0.1")
