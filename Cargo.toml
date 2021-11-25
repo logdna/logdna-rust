@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.5.6"
+version = "0.6.0"
 authors = ["engineering@logdna.com"]
 edition = "2018"
 license = "MIT"
