@@ -43,7 +43,7 @@ serde_urlencoded = "0.7"
 utf-8 = "0.7"
 
 [dev-dependencies]
-env_logger = "*"
+env_logger = "0.9"
 tokio-test = "0.4"
 tokio = { version = "1", features = ["rt", "macros", "io-util"] }
 tokio-util = { version = "0.6", features = ["compat"] }
