@@ -3,7 +3,8 @@ use std::time::Duration;
 use hyper::client::connect::dns::GaiResolver;
 use hyper::client::HttpConnector;
 pub use hyper::{body, client::Builder as HyperBuilder, Client as HyperClient};
-use hyper_rustls::HttpsConnector;
+use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
+use rustls::client::ClientConfig as TlsClientConfig;
 use tokio::time::timeout;
 
 use crate::body::IngestBodyBuffer;
@@ -42,17 +43,30 @@ impl Client {
     ///     .expect("RequestTemplate::builder()");
     /// let client = Client::new(request_template);
     /// ```
-    pub fn new(template: RequestTemplate) -> Self {
+    pub fn new(template: RequestTemplate, require_tls: Option<bool>) -> Self {
         let http_connector = {
             let mut connector = HttpConnector::new_with_resolver(GaiResolver::new());
             connector.enforce_http(false); // this is needed or https:// urls will error
+            connector.set_reuse_address(true);
+            connector.set_keepalive(Some(std::time::Duration::from_secs(120)));
             connector
         };
 
-        let mut tls = rustls::ClientConfig::new();
-        tls.root_store =
-            rustls_native_certs::load_native_certs().expect("could not load platform certs");
-        let https_connector = hyper_rustls::HttpsConnector::from((http_connector, tls));
+        let tls_config = TlsClientConfig::builder()
+            .with_safe_defaults()
+            .with_native_roots()
+            .with_no_client_auth();
+
+        let https_connector_builder =
+            hyper_rustls::HttpsConnectorBuilder::new().with_tls_config(tls_config);
+        let https_connector_builder = if require_tls.unwrap_or(true) {
+            https_connector_builder.https_only()
+        } else {
+            https_connector_builder.https_or_http()
+        };
+        let https_connector_builder = https_connector_builder.enable_http1().enable_http2();
+
+        let https_connector = https_connector_builder.wrap_connector(http_connector);
 
         Client {
             hyper: HyperClient::builder()
@@ -66,6 +80,7 @@ impl Client {
     pub fn set_timeout(&mut self, timeout: Duration) {
         self.timeout = timeout
     }
+
     /// Send an IngestBody to the LogDNA Ingest API
     ///
     /// Returns an IngestResponse, which is a future that must be run on the Tokio Runtime
