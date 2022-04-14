@@ -183,6 +183,14 @@ pub trait LineMetaMut: LineMeta {
     fn set_labels(&mut self, labels: KeyValueMap) -> Result<(), LineMetaError>;
     fn set_level(&mut self, level: String) -> Result<(), LineMetaError>;
     fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError>;
+    fn get_annotations_mut(&mut self) -> &mut Option<KeyValueMap>;
+    fn get_app_mut(&mut self) -> &mut Option<String>;
+    fn get_env_mut(&mut self) -> &mut Option<String>;
+    fn get_file_mut(&mut self) -> &mut Option<String>;
+    fn get_host_mut(&mut self) -> &mut Option<String>;
+    fn get_labels_mut(&mut self) -> &mut Option<KeyValueMap>;
+    fn get_level_mut(&mut self) -> &mut Option<String>;
+    fn get_meta_mut(&mut self) -> &mut Option<Value>;
 }
 
 /// Represents a line that provides accessor to the underlying data buffer for manipulation.
@@ -589,6 +597,30 @@ impl LineMetaMut for LineBuilder {
         self.meta = Some(meta);
         Ok(())
     }
+    fn get_annotations_mut(&mut self) -> &mut Option<KeyValueMap> {
+        &mut self.annotations
+    }
+    fn get_app_mut(&mut self) -> &mut Option<String> {
+        &mut self.app
+    }
+    fn get_env_mut(&mut self) -> &mut Option<String> {
+        &mut self.env
+    }
+    fn get_file_mut(&mut self) -> &mut Option<String> {
+        &mut self.file
+    }
+    fn get_host_mut(&mut self) -> &mut Option<String> {
+        &mut self.host
+    }
+    fn get_labels_mut(&mut self) -> &mut Option<KeyValueMap> {
+        &mut self.labels
+    }
+    fn get_level_mut(&mut self) -> &mut Option<String> {
+        &mut self.level
+    }
+    fn get_meta_mut(&mut self) -> &mut Option<Value> {
+        &mut self.meta
+    }
 }
 
 impl LineBufferMut for LineBuilder {
@@ -638,6 +670,30 @@ impl LineMetaMut for &mut LineBuilder {
     fn set_meta(&mut self, meta: Value) -> Result<(), LineMetaError> {
         self.meta = Some(meta);
         Ok(())
+    }
+    fn get_annotations_mut(&mut self) -> &mut Option<KeyValueMap> {
+        &mut self.annotations
+    }
+    fn get_app_mut(&mut self) -> &mut Option<String> {
+        &mut self.app
+    }
+    fn get_env_mut(&mut self) -> &mut Option<String> {
+        &mut self.env
+    }
+    fn get_file_mut(&mut self) -> &mut Option<String> {
+        &mut self.file
+    }
+    fn get_host_mut(&mut self) -> &mut Option<String> {
+        &mut self.host
+    }
+    fn get_labels_mut(&mut self) -> &mut Option<KeyValueMap> {
+        &mut self.labels
+    }
+    fn get_level_mut(&mut self) -> &mut Option<String> {
+        &mut self.level
+    }
+    fn get_meta_mut(&mut self) -> &mut Option<Value> {
+        &mut self.meta
     }
 }
 
