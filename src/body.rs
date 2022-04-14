@@ -761,11 +761,10 @@ impl Default for KeyValueMap {
         Self::new()
     }
 }
+
 impl From<BTreeMap<String, String>> for KeyValueMap {
     fn from(map: BTreeMap<String, String>) -> Self {
-        Self {
-            0: HashMap::from_iter(map),
-        }
+        Self(HashMap::from_iter(map))
     }
 }
 
