@@ -4,4 +4,5 @@
 *.deb
 *.rpm
 *.lock
+.cargo_cache
 proptest*
