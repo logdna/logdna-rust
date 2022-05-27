@@ -34,7 +34,7 @@ log = "0.4"
 time = "0.3"
 derivative = "2"
 smallvec = "1"
-countme = "2"
+countme = "3.0.1"
 
 #serialization
 serde = { version = "1", features = ["derive"] }
@@ -46,11 +46,11 @@ utf-8 = "0.7"
 env_logger = "0.9"
 tokio-test = "0.4"
 tokio = { version = "1", features = ["rt", "macros", "io-util"] }
-tokio-util = { version = "0.6", features = ["compat"] }
-proptest = "0.10"
+tokio-util = { version = "0.7.2", features = ["compat"] }
+proptest = "1.0.0"
 flate2 = "1.0"
-serial_test = "0.5"
-countme = { version = "2", features = ["enable"] }
+serial_test = "0.6"
+countme = { version = "3.0.1", features = ["enable"] }
 
 [profile.release]
 debug=true
