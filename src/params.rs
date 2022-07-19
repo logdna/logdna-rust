@@ -40,6 +40,7 @@ impl Params {
 }
 
 /// Used to build an instance of Params
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct ParamsBuilder {
     hostname: Option<String>,
     mac: Option<String>,
