@@ -70,7 +70,7 @@ impl ParamsBuilder {
     }
     /// Sets the ip field, optional
     pub fn ip<T: Into<String>>(&mut self, ip: T) -> &mut Self {
-        self.hostname = Some(ip.into());
+        self.ip = Some(ip.into());
         self
     }
     /// Sets the tags field, optional
