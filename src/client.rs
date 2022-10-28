@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use hyper::client::connect::dns::GaiResolver;
 use hyper::client::HttpConnector;
 pub use hyper::{body, client::Builder as HyperBuilder, Client as HyperClient};
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
@@ -8,13 +7,14 @@ use rustls::client::ClientConfig as TlsClientConfig;
 use tokio::time::timeout;
 
 use crate::body::IngestBodyBuffer;
+use crate::dns::TrustDnsResolver;
 use crate::error::HttpError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
-    hyper: HyperClient<HttpsConnector<HttpConnector<GaiResolver>>, IngestBodyBuffer>,
+    hyper: HyperClient<HttpsConnector<HttpConnector<TrustDnsResolver>>, IngestBodyBuffer>,
     template: RequestTemplate,
     timeout: Duration,
 }
@@ -44,8 +44,10 @@ impl Client {
     /// let client = Client::new(request_template);
     /// ```
     pub fn new(template: RequestTemplate, require_tls: Option<bool>) -> Self {
+        let dns_resolver =
+            TrustDnsResolver::new().expect("Could not read system DNS configuration");
         let http_connector = {
-            let mut connector = HttpConnector::new_with_resolver(GaiResolver::new());
+            let mut connector = HttpConnector::new_with_resolver(dns_resolver);
             connector.enforce_http(false); // this is needed or https:// urls will error
             connector.set_reuse_address(true);
             connector.set_keepalive(Some(std::time::Duration::from_secs(120)));
