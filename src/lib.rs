@@ -101,6 +101,7 @@ pub mod response;
 /// Log line and body serialization
 pub mod serialize;
 
+mod dns;
 mod segmented_buffer;
 
 #[cfg(test)]

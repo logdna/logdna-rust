@@ -390,7 +390,7 @@ impl<F> SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
 
 impl<F> Clone for SegmentedPoolBuf<F, Buffer, AllocBufferFn> {
     fn clone(&self) -> Self {
-        let mut reader = (&self.buf).bytes_reader();
+        let mut reader = self.buf.bytes_reader();
         let mut ret = self.duplicate();
         std::io::copy(&mut reader, &mut ret).unwrap();
         ret
