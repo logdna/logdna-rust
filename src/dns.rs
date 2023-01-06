@@ -102,7 +102,10 @@ impl Service<hyper_dns::Name> for TrustDnsResolver {
                                 (Ok(ref mut new_system_config), Ok(system_config))
                                     if new_system_config != system_config =>
                                 {
-                                    std::mem::swap(system_config, new_system_config)
+                                    std::mem::swap(system_config, new_system_config);
+                                    let (config, opts) = system_config.clone();
+                                    resolver.resolver =
+                                        AsyncResolver::new(config, opts, TokioHandle)?;
                                 }
                                 _ => (),
                             }
