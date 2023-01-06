@@ -105,7 +105,7 @@ impl hyper::body::HttpBody for IngestBodyBuffer {
 }
 
 /// Type used to construct a body for an IngestRequest
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq)]
 pub struct IngestBody {
     lines: Vec<Line>,
 }
@@ -200,7 +200,7 @@ pub trait LineBufferMut: LineMetaMut {
 }
 
 /// Defines a log line, marking none required fields as Option
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Line {
     /// The annotations field, which is a key value map
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -389,7 +389,7 @@ impl Line {
 ///    .build()
 ///    .expect("Line::builder()");
 /// ```
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct LineBuilder {
     pub annotations: Option<KeyValueMap>,
     pub app: Option<String>,
@@ -778,7 +778,7 @@ impl AsRef<IngestBody> for IngestBody {
 }
 
 /// Json key value map (json object with a depth of 1)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct KeyValueMap(HashMap<String, String>);
 
 impl Deref for KeyValueMap {
