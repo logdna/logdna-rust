@@ -23,8 +23,8 @@ struct ResolverInner {
 
 type SharedResolver = Arc<Mutex<ResolverInner>>;
 
-static SYSTEM_CONF: Lazy<io::Result<(ResolverConfig, ResolverOpts)>> =
-    Lazy::new(|| system_conf::read_system_conf().map_err(io::Error::from));
+static SYSTEM_CONF: Lazy<Mutex<io::Result<(ResolverConfig, ResolverOpts)>>> =
+    Lazy::new(|| Mutex::new(system_conf::read_system_conf().map_err(io::Error::from)));
 
 #[derive(Clone)]
 pub(crate) struct TrustDnsResolver {
@@ -43,7 +43,7 @@ enum State {
 
 impl TrustDnsResolver {
     pub(crate) fn new() -> io::Result<Self> {
-        SYSTEM_CONF.as_ref().map_err(|e| {
+        SYSTEM_CONF.blocking_lock().as_ref().map_err(|e| {
             io::Error::new(e.kind(), format!("error reading DNS system conf: {}", e))
         })?;
 
@@ -94,6 +94,20 @@ impl Service<hyper_dns::Name> for TrustDnsResolver {
                         break lookup;
                     }
                     Err(e) => {
+                        let new_system_config =
+                            system_conf::read_system_conf().map_err(io::Error::from);
+                        if new_system_config.is_ok() {
+                            let mut system_config = SYSTEM_CONF.lock().await;
+                            match (new_system_config, system_config.as_mut()) {
+                                (Ok(ref mut new_system_config), Ok(system_config))
+                                    if new_system_config != system_config =>
+                                {
+                                    std::mem::swap(system_config, new_system_config)
+                                }
+                                _ => (),
+                            }
+                        };
+
                         if let Some(delay) = resolver.backoff.next_backoff() {
                             drop(resolver);
                             tokio::time::sleep(delay).await;
@@ -123,6 +137,8 @@ async fn new_resolver() -> Result<
     Box<dyn std::error::Error + Send + Sync>,
 > {
     let (config, opts) = SYSTEM_CONF
+        .lock()
+        .await
         .as_ref()
         .expect("can't construct TrustDnsResolver if SYSTEM_CONF is error")
         .clone();
