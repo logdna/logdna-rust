@@ -355,17 +355,14 @@ impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for 
         Ok(())
     }
     fn field_count(&self) -> usize {
-        2 + if Option::is_none(&self.annotations) {
-            0
-        } else {
-            1
-        } + if Option::is_none(&self.app) { 0 } else { 1 }
-            + if Option::is_none(&self.env) { 0 } else { 1 }
-            + if Option::is_none(&self.file) { 0 } else { 1 }
-            + if Option::is_none(&self.host) { 0 } else { 1 }
-            + if Option::is_none(&self.labels) { 0 } else { 1 }
-            + if Option::is_none(&self.level) { 0 } else { 1 }
-            + if Option::is_none(&self.meta) { 0 } else { 1 }
+        2 + usize::from(!Option::is_none(&self.annotations))
+            + usize::from(!Option::is_none(&self.app))
+            + usize::from(!Option::is_none(&self.env))
+            + usize::from(!Option::is_none(&self.file))
+            + usize::from(!Option::is_none(&self.host))
+            + usize::from(!Option::is_none(&self.labels))
+            + usize::from(!Option::is_none(&self.level))
+            + usize::from(!Option::is_none(&self.meta))
     }
 }
 
