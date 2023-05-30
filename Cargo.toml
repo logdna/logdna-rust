@@ -13,7 +13,7 @@ thiserror = "1"
 #io
 bytes = "1"
 tokio = "1"
-async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
+async-compression = {version = "0.4", features = ["futures-io", "gzip"]}
 
 # async
 futures = "0.3"
@@ -27,8 +27,8 @@ hyper = { version = "0.14", features = ["client", "tcp", "http2"] }
 trust-dns-resolver = "0.22"
 
 #tls
-rustls = "0.20"
-hyper-rustls = { version = "0.23", features = ["http2", "logging"] }
+rustls = "0.21"
+hyper-rustls = { version = "0.24", features = ["http2", "logging"] }
 
 #utils
 backoff = "0.4"
@@ -49,10 +49,10 @@ utf-8 = "0.7"
 env_logger = "0.9"
 tokio-test = "0.4"
 tokio = { version = "1", features = ["rt", "macros", "io-util"] }
-tokio-util = { version = "0.6", features = ["compat"] }
-proptest = "0.10"
-flate2 = "1.0"
-serial_test = "0.5"
+tokio-util = { version = "0.7", features = ["compat"] }
+proptest = "1"
+flate2 = "1"
+serial_test = "2"
 countme = { version = "2", features = ["enable"] }
 
 [profile.release]
