@@ -844,6 +844,7 @@ pub(crate) mod test {
     }
 
     //recursive JSON type
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn json_st(depth: u32) -> impl Strategy<Value = serde_json::Value> {
         let leaf = prop_oneof![
             Just(serde_json::Value::Null),

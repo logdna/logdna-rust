@@ -1,6 +1,6 @@
 [package]
 name = "logdna-client"
-version = "0.7.3"
+version = "0.7.4"
 authors = ["engineering@logdna.com"]
 edition = "2018"
 license = "MIT"
@@ -13,7 +13,7 @@ thiserror = "1"
 #io
 bytes = "1"
 tokio = "1"
-async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
+async-compression = {version = "0.4", features = ["futures-io", "gzip"]}
 
 # async
 futures = "0.3"
@@ -24,11 +24,11 @@ pin-project = "1"
 #http/net
 http = "0.2"
 hyper = { version = "0.14", features = ["client", "tcp", "http2"] }
-trust-dns-resolver = "0.22"
+trust-dns-resolver = { version = "0.23", features = ["tokio"] }
 
 #tls
-rustls = "0.20"
-hyper-rustls = { version = "0.23", features = ["http2", "logging"] }
+rustls = "0.21"
+hyper-rustls = { version = "0.24", features = ["http2", "logging"] }
 
 #utils
 backoff = "0.4"
