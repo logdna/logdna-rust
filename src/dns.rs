@@ -13,11 +13,11 @@ use tokio::sync::Mutex;
 use trust_dns_resolver::{
     config::{ResolverConfig, ResolverOpts},
     lookup_ip::LookupIpIntoIter,
-    system_conf, AsyncResolver, TokioConnection, TokioConnectionProvider, TokioHandle,
+    system_conf, TokioAsyncResolver,
 };
 
 struct ResolverInner {
-    resolver: AsyncResolver<TokioConnection, TokioConnectionProvider>,
+    resolver: TokioAsyncResolver,
     backoff: ExponentialBackoff<SystemClock>,
 }
 
@@ -109,8 +109,7 @@ impl Service<hyper_dns::Name> for TrustDnsResolver {
                                 {
                                     std::mem::swap(system_config, new_system_config);
                                     let (config, opts) = system_config.clone();
-                                    resolver.resolver =
-                                        AsyncResolver::new(config, opts, TokioHandle)?;
+                                    resolver.resolver = TokioAsyncResolver::tokio(config, opts);
                                 }
                                 _ => (),
                             }
@@ -140,16 +139,13 @@ impl Iterator for SocketAddrs {
     }
 }
 
-async fn new_resolver() -> Result<
-    AsyncResolver<TokioConnection, TokioConnectionProvider>,
-    Box<dyn std::error::Error + Send + Sync>,
-> {
+async fn new_resolver() -> Result<TokioAsyncResolver, Box<dyn std::error::Error + Send + Sync>> {
     let (config, opts) = SYSTEM_CONF
         .lock()
         .expect("Failed to lock SYSTEM_CONF")
         .as_ref()
         .expect("can't construct TrustDnsResolver if SYSTEM_CONF is error")
         .clone();
-    let resolver = AsyncResolver::new(config, opts, TokioHandle)?;
+    let resolver = TokioAsyncResolver::tokio(config, opts);
     Ok(resolver)
 }
