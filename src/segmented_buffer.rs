@@ -100,7 +100,7 @@ impl Buf for Buffer {
 
 // TODO: expose size when const generics become available
 #[derive(PartialEq)]
-pub struct SegmentedBuf<T> {
+pub struct SegmentedBuf<T: 'static> {
     _c: countme::Count<Self>,
     pub(crate) bufs: SmallVec<[T; 4]>,
     pos: usize,
@@ -318,7 +318,7 @@ impl futures::io::AsyncBufRead for SegmentedBuf<Reusable<Buffer>> {
 }
 
 #[pin_project]
-pub struct SegmentedPoolBuf<Fut, T, Fi>
+pub struct SegmentedPoolBuf<Fut, T: 'static, Fi>
 where
     T: ClearBuf,
 {
@@ -713,7 +713,7 @@ impl futures::io::AsyncBufRead for SegmentedBufBytesReader<'_> {
     }
 }
 
-pub struct SegmentedPoolBufIter<'a, F, T, Fi>
+pub struct SegmentedPoolBufIter<'a, F, T: 'static, Fi>
 where
     T: std::marker::Send + ClearBuf,
 {
