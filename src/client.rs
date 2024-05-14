@@ -49,9 +49,9 @@ impl Client {
             connector
         };
 
-        let mut tls = rustls::ClientConfig::new();
-        tls.root_store =
-            rustls_native_certs::load_native_certs().expect("could not load platform certs");
+        let mut root_certs = rustls::RootCertStore::empty();
+        root_certs.add_parsable_certificates(rustls_native_certs::load_native_certs().expect("could not load platform certs"));
+        let tls = rustls::ClientConfig::builder().with_root_certificates(root_certs).with_no_client_auth();
         let https_connector = hyper_rustls::HttpsConnector::from((http_connector, tls));
 
         Client {
