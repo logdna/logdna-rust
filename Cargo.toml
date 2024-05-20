@@ -13,7 +13,7 @@ thiserror = "1"
 #io
 bytes = "1"
 tokio = "1"
-async-compression = {version = "0.3", features = ["futures-io", "gzip"]}
+async-compression = {version = "0.4", features = ["futures-io", "gzip"]}
 
 # async
 futures = "0.3"
