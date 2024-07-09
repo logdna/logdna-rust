@@ -1,20 +1,21 @@
 use std::time::Duration;
 
-use hyper::client::HttpConnector;
-pub use hyper::{body, client::Builder as HyperBuilder, Client as HyperClient};
+use http_body_util::BodyExt;
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client as HyperClient;
 use rustls::client::ClientConfig as TlsClientConfig;
 use tokio::time::timeout;
 
 use crate::body::IngestBodyBuffer;
-use crate::dns::TrustDnsResolver;
+use crate::dns::HickoryDnsResolver;
 use crate::error::HttpError;
 use crate::request::RequestTemplate;
 use crate::response::{IngestResponse, Response};
 
 /// Client for sending IngestRequests to LogDNA
 pub struct Client {
-    hyper: HyperClient<HttpsConnector<HttpConnector<TrustDnsResolver>>, IngestBodyBuffer>,
+    hyper: HyperClient<HttpsConnector<HttpConnector<HickoryDnsResolver>>, IngestBodyBuffer>,
     template: RequestTemplate,
     timeout: Duration,
 }
@@ -43,9 +44,12 @@ impl Client {
     ///     .expect("RequestTemplate::builder()");
     /// let client = Client::new(request_template);
     /// ```
-    pub fn new(template: RequestTemplate, require_tls: Option<bool>) -> Self {
+    pub fn new(
+        template: RequestTemplate,
+        require_tls: Option<bool>,
+    ) -> Result<Self, std::io::Error> {
         let dns_resolver =
-            TrustDnsResolver::new().expect("Could not read system DNS configuration");
+            HickoryDnsResolver::new().expect("Could not read system DNS configuration");
         let http_connector = {
             let mut connector = HttpConnector::new_with_resolver(dns_resolver);
             connector.enforce_http(false); // this is needed or https:// urls will error
@@ -54,10 +58,9 @@ impl Client {
             connector
         };
 
-        let tls_config = TlsClientConfig::builder()
-            .with_safe_defaults()
-            .with_native_roots()
-            .with_no_client_auth();
+        let tls_config: rustls::ConfigBuilder<_, _> =
+            TlsClientConfig::builder().with_native_roots()?;
+        let tls_config = tls_config.with_no_client_auth();
 
         let https_connector_builder =
             hyper_rustls::HttpsConnectorBuilder::new().with_tls_config(tls_config);
@@ -70,13 +73,13 @@ impl Client {
 
         let https_connector = https_connector_builder.wrap_connector(http_connector);
 
-        Client {
-            hyper: HyperClient::builder()
+        Ok(Client {
+            hyper: HyperClient::builder(hyper_util::rt::TokioExecutor::new())
                 .pool_max_idle_per_host(20)
                 .build(https_connector),
             template,
             timeout: Duration::from_secs(5),
-        }
+        })
     }
     /// Sets the request timeout
     pub fn set_timeout(&mut self, timeout: Duration) {
@@ -140,7 +143,7 @@ impl Client {
         let status_code = response.status();
         let status = status_code.as_u16();
         if !(200..300).contains(&status) {
-            let body_bytes = body::to_bytes(response.into_body()).await?;
+            let body_bytes = response.into_body().collect().await?.to_bytes();
             Ok(Response::Failed(
                 Box::new(body),
                 status_code,

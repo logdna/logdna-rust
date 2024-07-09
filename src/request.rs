@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use async_compression::futures::write::GzipEncoder;
 use async_compression::Level;
-use derivative::Derivative;
+use educe::Educe;
 use futures::io::AsyncWriteExt;
 use http::header::HeaderValue;
 use http::header::ACCEPT_CHARSET;
@@ -26,10 +26,10 @@ const SERIALIZATION_BUF_RESERVE_SEGMENTS: usize = 100;
 const SERIALIZATION_BUF_INITIAL_CAPACITY: usize = 1024 * 64 / SERIALIZATION_BUF_SEGMENT_SIZE;
 
 /// A reusable template to generate requests from
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct RequestTemplate {
-    #[derivative(Debug = "ignore")]
+    #[educe(Debug(ignore))]
     pool: async_buf_pool::Pool<AllocBufferFn, Buffer>,
     /// HTTP method, default is POST
     pub method: Method,
@@ -211,9 +211,10 @@ impl TemplateBuilder {
         self
     }
     /// Set the host field
-    pub fn host<T: Into<String>>(&mut self, host: T) -> &mut Self
+    pub fn host<T>(&mut self, host: T) -> &mut Self
     where
         T: TryInto<HeaderValue, Error = http::header::InvalidHeaderValue>,
+        T: Into<String>,
     {
         let host = host.into();
         if host.is_empty() {
@@ -312,6 +313,8 @@ mod test {
     use crate::body::{IngestBody, IngestBodyBuffer, IntoIngestBodyBuffer};
     use proptest::prelude::*;
 
+    use http_body_util::BodyExt;
+
     use flate2::read::GzDecoder;
 
     proptest! {
@@ -333,7 +336,7 @@ mod test {
             let body: IngestBodyBuffer = tokio_test::block_on(IntoIngestBodyBuffer::into(&ingest_body)).unwrap();
 
             let mut request = tokio_test::block_on(request_template.new_request(&body)).unwrap();
-            let req_body_bytes= tokio_test::block_on( hyper::body::to_bytes(request.body_mut())).unwrap();
+            let req_body_bytes= tokio_test::block_on( async { request.body_mut().collect().await.unwrap().to_bytes() });
 
             let mut d = GzDecoder::new(req_body_bytes.reader());
 

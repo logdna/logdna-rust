@@ -84,23 +84,22 @@ impl Clone for IngestBodyBuffer {
 }
 
 // TODO add test
-impl hyper::body::HttpBody for IngestBodyBuffer {
+impl hyper::body::Body for IngestBodyBuffer {
     type Data = async_buf_pool::Reusable<Buffer>;
     type Error = Box<IngestBufError>;
 
-    fn poll_data(
+    fn poll_frame(
         self: Pin<&mut Self>,
         _: &mut task::Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
         let mut this = self.project();
-        Poll::Ready(this.buf.buf.bufs.pop().map(Ok))
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut task::Context<'_>,
-    ) -> Poll<Result<Option<hyper::HeaderMap>, Self::Error>> {
-        Poll::Ready(Ok(None))
+        Poll::Ready(
+            this.buf
+                .buf
+                .bufs
+                .pop()
+                .map(|data| Ok(hyper::body::Frame::data(data))),
+        )
     }
 }
 

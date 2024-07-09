@@ -6,11 +6,11 @@ use std::sync::Arc;
 use std::task::{self, Poll};
 
 use backoff::{backoff::Backoff, exponential::ExponentialBackoff, SystemClock};
-use hyper::client::connect::dns as hyper_dns;
-use hyper::service::Service;
+use hyper_util::client::legacy::connect::dns as hyper_dns;
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
-use trust_dns_resolver::{
+use tower::Service;
+use hickory_resolver::{
     config::{ResolverConfig, ResolverOpts},
     lookup_ip::LookupIpIntoIter,
     system_conf, TokioAsyncResolver,
@@ -27,7 +27,7 @@ static SYSTEM_CONF: Lazy<std::sync::Mutex<io::Result<(ResolverConfig, ResolverOp
     Lazy::new(|| std::sync::Mutex::new(system_conf::read_system_conf().map_err(io::Error::from)));
 
 #[derive(Clone)]
-pub(crate) struct TrustDnsResolver {
+pub(crate) struct HickoryDnsResolver {
     state: Arc<Mutex<State>>,
 }
 
@@ -41,7 +41,7 @@ enum State {
     Ready(SharedResolver),
 }
 
-impl TrustDnsResolver {
+impl HickoryDnsResolver {
     pub(crate) fn new() -> io::Result<Self> {
         SYSTEM_CONF
             .lock()
@@ -54,13 +54,13 @@ impl TrustDnsResolver {
         // At this stage, we might not have been called in the context of a
         // Tokio Runtime, so we must delay the actual construction of the
         // resolver.
-        Ok(TrustDnsResolver {
+        Ok(HickoryDnsResolver {
             state: Arc::new(Mutex::new(State::Init(Some(ExponentialBackoff::default())))),
         })
     }
 }
 
-impl Service<hyper_dns::Name> for TrustDnsResolver {
+impl Service<hyper_dns::Name> for HickoryDnsResolver {
     type Response = SocketAddrs;
     type Error = Box<dyn std::error::Error + Send + Sync>;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -144,7 +144,7 @@ async fn new_resolver() -> Result<TokioAsyncResolver, Box<dyn std::error::Error 
         .lock()
         .expect("Failed to lock SYSTEM_CONF")
         .as_ref()
-        .expect("can't construct TrustDnsResolver if SYSTEM_CONF is error")
+        .expect("can't construct HickoryDnsResolver if SYSTEM_CONF is error")
         .clone();
     let resolver = TokioAsyncResolver::tokio(config, opts);
     Ok(resolver)

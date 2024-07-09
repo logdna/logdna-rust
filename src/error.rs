@@ -23,7 +23,7 @@ where
     T: Send + 'static,
 {
     Build(RequestError),
-    Send(T, hyper::Error),
+    Send(T, hyper_util::client::legacy::Error),
     Timeout(T),
     Hyper(hyper::Error),
     Utf8(std::str::Utf8Error),

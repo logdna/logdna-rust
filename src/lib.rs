@@ -129,7 +129,7 @@ mod tests {
             .api_key(env::var("API_KEY").expect("api key missing"))
             .build()
             .expect("RequestTemplate::builder()");
-        let client = Client::new(request_template, Some(true));
+        let client = Client::new(request_template, Some(true)).expect("failed to create client");
         let labels = KeyValueMap::new()
             .add("app", "test")
             .add("workload", "test");
