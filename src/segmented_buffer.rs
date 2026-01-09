@@ -344,7 +344,7 @@ impl From<SegmentedPoolBufError> for std::io::Error {
     fn from(err: SegmentedPoolBufError) -> std::io::Error {
         match err {
             SegmentedPoolBufError::Io(e) => e,
-            e => std::io::Error::new(std::io::ErrorKind::Other, Box::new(e)),
+            e => std::io::Error::other(Box::new(e)),
         }
     }
 }
@@ -1056,7 +1056,7 @@ mod test {
             let b = Buffer::new(BytesMut::new());
             drop(b);
             fence(Ordering::SeqCst);
-            // Ensure we havn't allocated any bufs yet
+            // Ensure we haven't allocated any bufs yet
             let counts = countme::get::<Buffer>();
             assert_eq!(counts.live, 0);
         }
@@ -1071,7 +1071,7 @@ mod test {
         let pool = buf.pool.clone();
 
         fence(Ordering::SeqCst);
-        // Ensure we havn't allocated more bufs than necessary
+        // Ensure we haven't allocated more bufs than necessary
         let counts = countme::get::<Buffer>();
         assert!(counts.live > 0);
         assert!(counts.live <= initial_pool_size / segment_size + 1);

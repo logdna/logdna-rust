@@ -36,15 +36,16 @@ impl core::fmt::Debug for IngestBodyBuffer {
             .collect::<Result<Vec<u8>, _>>()
             .unwrap();
         if let Ok(b) = std::str::from_utf8(&buf) {
-            write!(f, "IngestBodyBuffer: {}", b)
+            write!(f, "IngestBodyBuffer: {b}")
         } else {
-            write!(f, "IngestBodyBuffer: {:?}", buf)
+            write!(f, "IngestBodyBuffer: {buf:?}")
         }
     }
 }
 
 impl PartialEq for IngestBodyBuffer {
     fn eq(&self, other: &Self) -> bool {
+        #[allow(clippy::unbuffered_bytes)]
         for (a, b) in self.reader().bytes().zip(other.reader().bytes()) {
             match (a, b) {
                 (Ok(a), Ok(b)) => {
@@ -148,7 +149,7 @@ impl IntoIngestBodyBuffer for IngestBody {
 }
 
 #[async_trait]
-impl<'a> IntoIngestBodyBuffer for &'a IngestBody {
+impl IntoIngestBodyBuffer for &IngestBody {
     type Error = serde_json::error::Error;
 
     async fn into(self) -> Result<IngestBodyBuffer, Self::Error> {
@@ -234,7 +235,7 @@ pub struct Line {
 }
 
 #[async_trait]
-impl<'a> IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for &'a Line {
+impl IngestLineSerialize<String, bytes::Bytes, HashMap<String, String>> for &Line {
     type Ok = ();
 
     fn has_annotations(&self) -> bool {
@@ -734,7 +735,7 @@ impl LineMeta for Line {
     }
 }
 
-impl<'a> LineMeta for &'a Line {
+impl LineMeta for &Line {
     fn get_annotations(&self) -> Option<&KeyValueMap> {
         self.annotations.as_ref()
     }

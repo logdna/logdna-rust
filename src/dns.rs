@@ -47,9 +47,7 @@ impl HickoryDnsResolver {
             .lock()
             .expect("Failed to lock SYSTEM_CONF")
             .as_ref()
-            .map_err(|e| {
-                io::Error::new(e.kind(), format!("error reading DNS system conf: {}", e))
-            })?;
+            .map_err(|e| io::Error::new(e.kind(), format!("error reading DNS system conf: {e}")))?;
 
         // At this stage, we might not have been called in the context of a
         // Tokio Runtime, so we must delay the actual construction of the
