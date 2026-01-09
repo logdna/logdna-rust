@@ -83,14 +83,14 @@ where
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
-            HttpError::Send(_, ref e) => write!(f, "{}", e),
+            HttpError::Send(_, ref e) => write!(f, "{e}"),
             HttpError::Timeout(_) => write!(f, "request timed out!"),
-            HttpError::Hyper(ref e) => write!(f, "{}", e),
-            HttpError::Build(ref e) => write!(f, "{}", e),
-            HttpError::Utf8(ref e) => write!(f, "{}", e),
-            HttpError::FromUtf8(ref e) => write!(f, "{}", e),
-            HttpError::Serialization(ref e) => write!(f, "{}", e),
-            HttpError::Other(ref e) => write!(f, "{}", e),
+            HttpError::Hyper(ref e) => write!(f, "{e}"),
+            HttpError::Build(ref e) => write!(f, "{e}"),
+            HttpError::Utf8(ref e) => write!(f, "{e}"),
+            HttpError::FromUtf8(ref e) => write!(f, "{e}"),
+            HttpError::Serialization(ref e) => write!(f, "{e}"),
+            HttpError::Other(ref e) => write!(f, "{e}"),
         }
     }
 }

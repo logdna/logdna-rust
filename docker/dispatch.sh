@@ -2,7 +2,7 @@
 
 curpath=$(dirname "$0")
 
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 _term() {
   docker kill "$child"
   status=$(docker inspect "$child" --format='{{.State.ExitCode}}')

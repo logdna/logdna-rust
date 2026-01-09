@@ -6,15 +6,15 @@ use std::sync::Arc;
 use std::task::{self, Poll};
 
 use backoff::{backoff::Backoff, exponential::ExponentialBackoff, SystemClock};
-use hyper_util::client::legacy::connect::dns as hyper_dns;
-use once_cell::sync::Lazy;
-use tokio::sync::Mutex;
-use tower::Service;
 use hickory_resolver::{
     config::{ResolverConfig, ResolverOpts},
     lookup_ip::LookupIpIntoIter,
     system_conf, TokioAsyncResolver,
 };
+use hyper_util::client::legacy::connect::dns as hyper_dns;
+use once_cell::sync::Lazy;
+use tokio::sync::Mutex;
+use tower::Service;
 
 struct ResolverInner {
     resolver: TokioAsyncResolver,
@@ -47,9 +47,7 @@ impl HickoryDnsResolver {
             .lock()
             .expect("Failed to lock SYSTEM_CONF")
             .as_ref()
-            .map_err(|e| {
-                io::Error::new(e.kind(), format!("error reading DNS system conf: {}", e))
-            })?;
+            .map_err(|e| io::Error::new(e.kind(), format!("error reading DNS system conf: {e}")))?;
 
         // At this stage, we might not have been called in the context of a
         // Tokio Runtime, so we must delay the actual construction of the
