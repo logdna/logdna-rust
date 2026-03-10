@@ -6,18 +6,19 @@ use std::sync::Arc;
 use std::task::{self, Poll};
 
 use backoff::{backoff::Backoff, exponential::ExponentialBackoff, SystemClock};
+use hickory_resolver::{
+    config::{ResolverConfig, ResolverOpts},
+    lookup_ip::LookupIpIntoIter,
+    name_server::TokioConnectionProvider,
+    system_conf, TokioResolver,
+};
 use hyper_util::client::legacy::connect::dns as hyper_dns;
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use tower::Service;
-use hickory_resolver::{
-    config::{ResolverConfig, ResolverOpts},
-    lookup_ip::LookupIpIntoIter,
-    system_conf, TokioAsyncResolver,
-};
 
 struct ResolverInner {
-    resolver: TokioAsyncResolver,
+    resolver: TokioResolver,
     backoff: ExponentialBackoff<SystemClock>,
 }
 
@@ -98,20 +99,21 @@ impl Service<hyper_dns::Name> for HickoryDnsResolver {
                         break lookup;
                     }
                     Err(e) => {
-                        let new_system_config =
+                        let mut new_system_config =
                             system_conf::read_system_conf().map_err(io::Error::from);
-                        if new_system_config.is_ok() {
+                        if let Ok(ref mut new_system_config) = new_system_config.as_mut() {
                             let mut system_config =
                                 SYSTEM_CONF.lock().expect("Failed to lock SYSTEM_CONF");
-                            match (new_system_config, system_config.as_mut()) {
-                                (Ok(ref mut new_system_config), Ok(system_config))
-                                    if new_system_config != system_config =>
-                                {
-                                    std::mem::swap(system_config, new_system_config);
-                                    let (config, opts) = system_config.clone();
-                                    resolver.resolver = TokioAsyncResolver::tokio(config, opts);
-                                }
-                                _ => (),
+
+                            if let Ok(system_config) = system_config.as_mut() {
+                                std::mem::swap(system_config, new_system_config);
+                                let (config, opts) = system_config.clone();
+                                resolver.resolver = TokioResolver::builder_with_config(
+                                    config,
+                                    TokioConnectionProvider::default(),
+                                )
+                                .with_options(opts)
+                                .build();
                             }
                         };
 
@@ -139,13 +141,16 @@ impl Iterator for SocketAddrs {
     }
 }
 
-async fn new_resolver() -> Result<TokioAsyncResolver, Box<dyn std::error::Error + Send + Sync>> {
+async fn new_resolver() -> Result<TokioResolver, Box<dyn std::error::Error + Send + Sync>> {
     let (config, opts) = SYSTEM_CONF
         .lock()
         .expect("Failed to lock SYSTEM_CONF")
         .as_ref()
         .expect("can't construct HickoryDnsResolver if SYSTEM_CONF is error")
         .clone();
-    let resolver = TokioAsyncResolver::tokio(config, opts);
+
+    let resolver = TokioResolver::builder_with_config(config, TokioConnectionProvider::default())
+        .with_options(opts)
+        .build();
     Ok(resolver)
 }
